@@ -1,0 +1,48 @@
+{
+  "form": {
+    "title": "USN Candidate Screening",
+    "description": "Four quick questions. Record your answers on video or audio — whatever you're comfortable with. There are no trick questions; we just want to get to know how you work.",
+    "answer_types_enabled": ["video", "audio"],
+    "collect_contact": {
+      "name": true,
+      "email": true,
+      "email_required": true
+    },
+    "settings": {
+      "allow_audio_only": true,
+      "default_answer_type": "video",
+      "max_answer_length_seconds": 120
+    }
+  },
+  "questions": [
+    {
+      "id": "experience",
+      "order": 1,
+      "prompt": "Walk me through your hospitality or event experience — what roles have you held, and what kinds of events?",
+      "answer_types": ["video", "audio"]
+    },
+    {
+      "id": "guest_recovery",
+      "order": 2,
+      "prompt": "You're mid-event, a guest is upset, and your captain isn't nearby. What do you do?",
+      "answer_types": ["video", "audio"]
+    },
+    {
+      "id": "reliability",
+      "order": 3,
+      "prompt": "What's your reliability like? Give an example of how you handle being scheduled somewhere you committed to.",
+      "answer_types": ["video", "audio"]
+    },
+    {
+      "id": "stamina_attire",
+      "order": 4,
+      "prompt": "Are you comfortable on your feet for 5–6 hour shifts, and do you have black service attire?",
+      "answer_types": ["video", "audio"]
+    }
+  ],
+  "webhook": {
+    "note": "Point this at POST {PUBLIC_BASE_URL}/webhooks/videoask and send the shared secret as the X-Webhook-Secret header (or ?secret= query param). The value must equal VIDEOASK_WEBHOOK_SECRET in your .env.",
+    "method": "POST",
+    "header": "X-Webhook-Secret"
+  }
+}
