@@ -34,6 +34,25 @@ function toCandidate(rec: AirtableRecord): Candidate {
         ? (f[F.reminderStage] as number)
         : undefined,
     onboardingCompleted: Boolean(f[F.onboardingCompleted]),
+    onboardingStatus:
+      f[F.onboardingStatus] != null ? String(f[F.onboardingStatus]) : undefined,
+    docusignEnvelopeId:
+      f[F.docusignEnvelopeId] != null
+        ? String(f[F.docusignEnvelopeId])
+        : undefined,
+    agreementSignedAt:
+      f[F.agreementSignedAt] != null
+        ? String(f[F.agreementSignedAt])
+        : undefined,
+    gustoSetupComplete: Boolean(f[F.gustoSetupComplete]),
+    availability: f[F.availability] != null ? String(f[F.availability]) : undefined,
+    roles: f[F.roles] != null ? String(f[F.roles]) : undefined,
+    transport: f[F.transport] != null ? String(f[F.transport]) : undefined,
+    attireSize: f[F.attireSize] != null ? String(f[F.attireSize]) : undefined,
+    hasBlackAttire: Boolean(f[F.hasBlackAttire]),
+    certs: f[F.certs] != null ? String(f[F.certs]) : undefined,
+    kloqdWorkerId:
+      f[F.kloqdWorkerId] != null ? String(f[F.kloqdWorkerId]) : undefined,
   };
 }
 
@@ -88,6 +107,23 @@ export async function updateCandidate(
     fields[F.reminderStage] = patch.reminderStage;
   if (patch.onboardingCompleted !== undefined)
     fields[F.onboardingCompleted] = patch.onboardingCompleted;
+  if (patch.onboardingStatus !== undefined)
+    fields[F.onboardingStatus] = patch.onboardingStatus;
+  if (patch.docusignEnvelopeId !== undefined)
+    fields[F.docusignEnvelopeId] = patch.docusignEnvelopeId;
+  if (patch.agreementSignedAt !== undefined)
+    fields[F.agreementSignedAt] = patch.agreementSignedAt;
+  if (patch.gustoSetupComplete !== undefined)
+    fields[F.gustoSetupComplete] = patch.gustoSetupComplete;
+  if (patch.availability !== undefined) fields[F.availability] = patch.availability;
+  if (patch.roles !== undefined) fields[F.roles] = patch.roles;
+  if (patch.transport !== undefined) fields[F.transport] = patch.transport;
+  if (patch.attireSize !== undefined) fields[F.attireSize] = patch.attireSize;
+  if (patch.hasBlackAttire !== undefined)
+    fields[F.hasBlackAttire] = patch.hasBlackAttire;
+  if (patch.certs !== undefined) fields[F.certs] = patch.certs;
+  if (patch.kloqdWorkerId !== undefined)
+    fields[F.kloqdWorkerId] = patch.kloqdWorkerId;
 
   const rec = await updateRecord(TABLE, id, fields);
   // In DRY_RUN the returned record only echoes the patch (email may be absent).
@@ -102,4 +138,28 @@ export async function listPendingOnboarding(): Promise<Candidate[]> {
   const formula = `AND({${F.onboardingSentAt}} != "", NOT({${F.onboardingCompleted}}))`;
   const records = await listRecords(TABLE, { filterByFormula: formula });
   return records.map(toCandidate);
+}
+
+/** All candidates currently sitting at a given onboarding-status value. */
+export async function listByOnboardingStatus(
+  status: string
+): Promise<Candidate[]> {
+  const formula = `{${F.onboardingStatus}} = "${escapeFormulaValue(status)}"`;
+  const records = await listRecords(TABLE, { filterByFormula: formula });
+  return records.map(toCandidate);
+}
+
+/** Find a candidate by the DocuSign envelope id stored on their record. */
+export async function findByEnvelopeId(
+  envelopeId: string
+): Promise<Candidate | null> {
+  const formula = `{${F.docusignEnvelopeId}} = "${escapeFormulaValue(
+    envelopeId
+  )}"`;
+  const records = await listRecords(TABLE, {
+    filterByFormula: formula,
+    maxRecords: 1,
+  });
+  const first = records[0];
+  return first ? toCandidate(first) : null;
 }

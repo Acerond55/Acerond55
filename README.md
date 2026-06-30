@@ -68,7 +68,13 @@ src/
   followup/
     reminders.ts         PURE idempotent "what nudge is due" logic
     sequence.ts          startOnboarding + runReminders
-    scheduler.ts         Lightweight in-process interval scheduler
+    scheduler.ts         Lightweight scheduler (reminders + onboarding scan)
+  onboarding/
+    spine.ts             PURE onboarding state machine (scanAction, flip guards)
+    service.ts           Step handlers (agreement, signed, payment, data, kloqd)
+    scanner.ts           Status-driven idempotent onboarding scan
+  docusign/signer.ts     AgreementSigner interface + console/example adapters
+  kloqd/client.ts        kloqd client — BLOCKED until the six facts are configured
   public/apply.html      Candidate-facing choice screen
   scripts/checkStatusOptions.ts   Standalone Airtable preflight
 content/
@@ -121,6 +127,43 @@ Set `DRY_RUN=false` only when you're ready for real writes and sends.
 | POST | `/webhooks/calendly` | Calendly `invitee.created` / no-show (HMAC verified) |
 | POST | `/call-outcome` | Interviewer marks a live call pass/fail (`X-Interviewer-Secret`) |
 | POST | `/tasks/run-reminders` | Run the reminder scan now (for external cron) |
+| POST | `/webhooks/docusign` | DocuSign Connect envelope-completed → Agreement Signed |
+| POST | `/onboarding/gusto-done` | Mark Gusto setup complete (`X-Interviewer-Secret`) |
+| POST | `/onboarding/deployment-data` | Submit lean deployment data → USN Complete |
+| POST | `/webhooks/kloqd` | kloqd worker-onboarding-complete → Deployable |
+| POST | `/tasks/run-onboarding` | Run the onboarding scan now (for external cron) |
+
+## Onboarding stage (post-screening)
+
+After a candidate passes screening you move them to **`Ready to Onboard`** and a
+second state machine — the **`Onboarding Status`** spine — takes over:
+
+```
+Ready to Onboard → Agreement Sent → Agreement Signed → Payment Setup Done →
+USN Complete → Sent to kloqd → Deployable
+```
+
+- **Step 1 (DocuSign):** the scanner sends the ICA (+ Schedule A, optionally the
+  W-9 in the same envelope), stores the envelope id, flips to `Agreement Sent`.
+- **Step 2 (DocuSign webhook):** envelope completed → `Agreement Signed`.
+- **Step 3 (Gusto):** Gusto sends its own invite (manual by default); tick
+  `Gusto Setup Complete` and the scan advances to `Payment Setup Done` and texts
+  the deployment-data form.
+- **Step 4 (lean data):** availability, roles, transport, attire, certs →
+  `USN Complete` once complete.
+- **Steps 5–6 (kloqd):** push the worker to kloqd → `Sent to kloqd`, then kloqd's
+  completion signal → `Deployable`.
+
+The spine is driven by a status-keyed scanner (idempotent: each action flips the
+status forward, so records are never processed twice) plus webhooks for the
+externally-driven transitions. DocuSign sits behind an `AgreementSigner`
+interface (console default + example adapter), exactly like the Notifier.
+
+> **kloqd is intentionally BLOCKED** until six facts are known (push endpoint,
+> auth, field map, agreement-accepted passthrough, agency join code, completion
+> signal). Until `KLOQD_API_URL` + `KLOQD_AUTH_TOKEN` are set, candidates hold at
+> `USN Complete` and each scan logs the block — nothing is built on guesses. See
+> `SETUP_CHECKLIST.md › 4c`.
 
 ## Scoring gate
 
@@ -169,11 +212,14 @@ touching the follow-up code.
 npm test
 ```
 
-Covers the three critical logic paths:
+Covers the critical logic paths:
 
 1. **Scoring gate** — pass/review/fail bucketing incl. null → review.
 2. **Reminder idempotency** — no double sends; missed-tick recovery.
-3. **Status-option safety check** — detects missing options with exact names.
+3. **Status-option safety check** — detects missing options with exact names
+   (now covering the `Onboarding Status` spine too).
+4. **Onboarding spine** — `scanAction` transitions, deployment-data
+   completeness, and forward-only (no-regression) status flips.
 
 ## Next steps (human dashboard work)
 

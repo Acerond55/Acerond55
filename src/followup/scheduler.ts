@@ -1,5 +1,6 @@
 import { config } from "../config.js";
 import { log } from "../lib/logger.js";
+import { runOnboardingScan } from "../onboarding/scanner.js";
 import { runReminders } from "./sequence.js";
 
 let timer: ReturnType<typeof setInterval> | null = null;
@@ -14,8 +15,11 @@ async function tick(): Promise<void> {
   running = true;
   try {
     await runReminders();
+    if (config.onboarding.scanEnabled) {
+      await runOnboardingScan();
+    }
   } catch (err) {
-    log.error("reminder scan failed", { error: String(err) });
+    log.error("scheduler tick failed", { error: String(err) });
   } finally {
     running = false;
   }

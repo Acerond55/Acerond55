@@ -1,5 +1,6 @@
 import { config } from "../config.js";
 import {
+  REQUIRED_ONBOARDING_STATUS_OPTIONS,
   REQUIRED_SCREEN_TYPE_OPTIONS,
   REQUIRED_STATUS_OPTIONS,
 } from "../domain.js";
@@ -15,6 +16,9 @@ export function requiredOptionsByField(): Record<string, string[]> {
   return {
     [config.airtable.fields.status]: [...REQUIRED_STATUS_OPTIONS],
     [config.airtable.fields.screenType]: [...REQUIRED_SCREEN_TYPE_OPTIONS],
+    [config.airtable.fields.onboardingStatus]: [
+      ...REQUIRED_ONBOARDING_STATUS_OPTIONS,
+    ],
   };
 }
 

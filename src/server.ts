@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { config } from "./config.js";
 import { router } from "./webhooks/routes.js";
+import { onboardingRouter } from "./webhooks/onboardingRoutes.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -38,6 +39,7 @@ export function createServer(): Express {
   });
 
   app.use(router);
+  app.use(onboardingRouter);
 
   return app;
 }
