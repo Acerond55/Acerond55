@@ -66,14 +66,17 @@ function makeConfiguredKloqdClient(): KloqdClient {
           agency_join_code: agencyJoinCode,
           name: candidate.name,
           email: candidate.email,
+          phone: candidate.phone,
+          preferred_language: candidate.preferredLanguage,
           availability: candidate.availability,
           roles: candidate.roles,
-          transport: candidate.transport,
-          attire_size: candidate.attireSize,
+          has_transport: candidate.hasTransport,
+          shirt_size: candidate.shirtSize,
           has_black_attire: candidate.hasBlackAttire,
           certs: candidate.certs,
-          // Fact #4: pass agreement-accepted so kloqd doesn't re-ask for legal.
-          agreement_accepted: Boolean(candidate.agreementSignedAt),
+          // Fact #4: the push only happens at USN Complete, i.e. after the ICA
+          // is signed — pass agreement-accepted so kloqd doesn't re-ask for legal.
+          agreement_accepted: true,
         }),
       });
       if (!res.ok) {

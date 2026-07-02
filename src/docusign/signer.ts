@@ -21,6 +21,8 @@ export interface AgreementResult {
 export interface AgreementSigner {
   readonly name: string;
   sendAgreement(req: AgreementRequest): Promise<AgreementResult>;
+  /** Void an in-flight envelope (e.g. when a candidate opts out via STOP). */
+  voidEnvelope?(envelopeId: string, reason: string): Promise<void>;
 }
 
 /**
@@ -38,6 +40,9 @@ export const consoleSigner: AgreementSigner = {
       envelopeId,
     });
     return { envelopeId };
+  },
+  async voidEnvelope(envelopeId: string, reason: string): Promise<void> {
+    log.info("[signer:console] would void DocuSign envelope", { envelopeId, reason });
   },
 };
 
@@ -87,6 +92,18 @@ export function makeExampleSigner(): AgreementSigner {
         throw new Error("[signer:example] DocuSign response had no envelopeId");
       }
       return { envelopeId: body.envelopeId };
+    },
+    async voidEnvelope(envelopeId: string, reason: string): Promise<void> {
+      const { baseUri, accountId, accessToken } = config.docusign;
+      if (!accountId || !accessToken) return;
+      await fetch(`${baseUri}/v2.1/accounts/${accountId}/envelopes/${envelopeId}`, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ status: "voided", voidedReason: reason }),
+      });
     },
   };
 }

@@ -30,17 +30,24 @@ Names must match the `AIRTABLE_FIELD_*` env vars (defaults shown):
 | `Onboarding Sent At` | Date (with time) | Set when the onboarding link goes out. |
 | `Reminder Stage` | Number (integer) | 0 = sent, 1 = day-2 done, 2 = day-4 done. |
 | `Onboarding Completed` | Checkbox | Stops the reminder sequence when checked. |
-| `Onboarding Status` | **Single select** | The onboarding spine. Options in 1b. |
+| `Phone` | Phone / single line text | Used for SMS + STOP matching. |
+| `Preferred Language` | **Single select** | English / Spanish / Either. Options in 1b. |
+| `Onboarding Status` | **Single select** | The onboarding spine. 9 options in 1b. |
 | `DocuSign Envelope ID` | Single line text | Stored when the agreement is sent. |
-| `Agreement Signed At` | Date (with time) | Stored on envelope completion. |
-| `Gusto Setup Complete` | Checkbox | Tick to advance past payment setup. |
-| `Availability` | Long text | Lean deployment data. |
-| `Roles` | Long text | Server / bartender / busser, etc. |
-| `Transport` | Single line text | Own car / how they reach venues. |
-| `Attire Size` | Single line text | Shirt/vest size. |
+| `Gusto Status` | **Single select** | Not Invited / Invited / Complete. |
+| `Deployment Form Sent` | Checkbox | Set when the form is texted. |
+| `Deployment Form Done` | Checkbox | Set when the form is completed. |
+| `Onboarding Nudge Count` | Number (integer) | Reset to 0 on every status flip. |
+| `Last Nudge Date` | Date (with time) | Guards against same-day double-sends. |
+| `Stall Stage` | **Single select** | Where they froze. Options in 1b. |
+| `Availability` | **Multi select** | Weekday Day / Weekday Eve / Sat / Sun. |
+| `Roles` | **Multi select** | Server / Bartender / Busser-Barback / Coat Check / Captain-track. |
+| `Has Transport` | **Single select** | Own car / Rides-transit / Depends on venue. |
+| `Shirt Size` | **Single select** | XS–3XL. |
 | `Has Black Attire` | Checkbox | Has black service attire y/n. |
-| `Certs` | Long text | TIPS / food handler, etc. |
-| `kloqd Worker ID` | Single line text | Returned by the kloqd push (Steps 5–6). |
+| `Certs` | **Multi select** | TIPS / Food Handler / None. |
+| `kloqd Worker ID` | Single line text | Returned by the kloqd push (Phase B). |
+| `TS Ready to Onboard` … `TS Stalled` | Date (with time) | One per stage transition (8 total) for funnel analytics. |
 
 ### 1b. Status single-select options — **add these EXACTLY by hand**
 
@@ -62,8 +69,8 @@ On the `Screen Type` field, add these two options:
 - `Video`
 - `Call`
 
-On the **`Onboarding Status`** field, add these **seven** options, in this order
-(this is the onboarding spine):
+On the **`Onboarding Status`** field, add these **nine** options — the seven
+linear spine states in order, then the two parking states:
 
 - `Ready to Onboard`
 - `Agreement Sent`
@@ -72,6 +79,20 @@ On the **`Onboarding Status`** field, add these **seven** options, in this order
 - `USN Complete`
 - `Sent to kloqd`
 - `Deployable`
+- `Onboarding Stalled`
+- `Opted Out`
+
+Add the remaining select-field options (the pipeline verifies these too and
+fails loudly if any are missing):
+
+- **`Stall Stage`** (mirrors the linear spine): `Ready to Onboard`, `Agreement Sent`, `Agreement Signed`, `Payment Setup Done`, `USN Complete`, `Sent to kloqd`, `Deployable`
+- **`Gusto Status`**: `Not Invited`, `Invited`, `Complete`
+- **`Preferred Language`**: `English`, `Spanish`, `Either`
+- **`Has Transport`**: `Own car`, `Rides-transit`, `Depends on venue`
+- **`Shirt Size`**: `XS`, `S`, `M`, `L`, `XL`, `2XL`, `3XL`
+- **`Availability`** (multi-select): `Weekday Day`, `Weekday Eve`, `Sat`, `Sun`
+- **`Roles`** (multi-select): `Server`, `Bartender`, `Busser-Barback`, `Coat Check`, `Captain-track`
+- **`Certs`** (multi-select): `TIPS`, `Food Handler`, `None`
 
 > ✅ **Verify:** run `npm run check:airtable`. It prints `✓ All required Airtable
 > status options are present.` or lists exactly what's missing.
@@ -172,66 +193,91 @@ the console notifier regardless, so you can't accidentally send during testing.
 
 ## 4b. Onboarding stage (post-screening)
 
-The onboarding half runs off the **`Onboarding Status`** spine (options added in
-1b). A candidate enters it at **`Ready to Onboard`**; from there the pipeline
-advances them step by step. Steps 1–4 are buildable today; Steps 5–6 (kloqd) are
-blocked until you have the six kloqd facts (section 4c).
+The onboarding half runs off the **`Onboarding Status`** spine (nine options in
+1b). A candidate enters at **`Ready to Onboard`**; the scanner advances them,
+sends stage nudges, and parks non-responders in **`Onboarding Stalled`** (a
+tracked state, not a failure). A **STOP** reply moves anyone to **`Opted Out`**
+and halts all messaging permanently. Every message goes out in the candidate's
+**`Preferred Language`** (English/Spanish).
 
 ### DocuSign (Step 1 send / Step 2 completion)
 
-1. Build a DocuSign **template** for the 3-page ICA. **[CONFIRM]** copy its
+1. Build a DocuSign **template** for the 3-page ICA + **W-9** in one envelope
+   (one signing session; `DOCUSIGN_INCLUDE_W9=true`). **[CONFIRM]** copy its
    template id into `DOCUSIGN_ICA_TEMPLATE_ID`.
 2. **[CONFIRM]** decide how Schedule A attaches per candidate (merge field vs a
    per-candidate document) and reflect it in the template.
-3. Recommended: add the **W-9** as a second document in the **same** template so
-   it's one signing session (`DOCUSIGN_INCLUDE_W9=true`).
-4. Enable DocuSign's built-in **reminder at 72 hrs** on the template/envelope.
-5. Set up **DocuSign Connect** to POST envelope-completed events to
-   `{PUBLIC_BASE_URL}/webhooks/docusign`; put the Connect **HMAC key** into
-   `DOCUSIGN_CONNECT_HMAC_KEY`.
-6. For live sending, fill `DOCUSIGN_ACCOUNT_ID` + `DOCUSIGN_ACCESS_TOKEN`,
-   set `DOCUSIGN_PROVIDER=example`, and complete `makeExampleSigner` in
-   `src/docusign/signer.ts` (the skeleton shows where, incl. the W-9 composite).
+3. Enable DocuSign's built-in **reminder at 72 hrs** on the template/envelope.
+4. Set up **DocuSign Connect** → POST to `{PUBLIC_BASE_URL}/webhooks/docusign`;
+   put the Connect **HMAC key** into `DOCUSIGN_CONNECT_HMAC_KEY`. The handler
+   covers **completed** (→ Agreement Signed), **declined** (→ Stalled + flag for
+   a personal call), and **bounce** (→ SMS asking for a better email). A
+   completed envelope with `w9Valid:false` is held for manual review.
+5. For live sending, fill `DOCUSIGN_ACCOUNT_ID` + `DOCUSIGN_ACCESS_TOKEN`, set
+   `DOCUSIGN_PROVIDER=example`, and complete `makeExampleSigner` in
+   `src/docusign/signer.ts` (incl. the W-9 composite + envelope void on STOP).
 
-> A candidate is moved to `Ready to Onboard` when screening passes and you're
-> satisfied (e.g. AI confidence High, or cleared from spot-check). The scanner
-> then sends the agreement automatically and flips to `Agreement Sent`.
+> Move a candidate to `Ready to Onboard` when screening passes and you're
+> satisfied (AI confidence High, or cleared from spot-check).
 
 ### Gusto (Step 3 direct deposit)
 
-Default is **manual**: Gusto sends its own onboarding invite (kept separate from
-DocuSign). When the candidate finishes Gusto, tick the **`Gusto Setup Complete`**
-checkbox (or `POST /onboarding/gusto-done` with `X-Interviewer-Secret`). The next
-scan advances them to `Payment Setup Done` and texts the deployment-data form.
-**[CONFIRM]** whether the Gusto invite is fired manually or via API/Make today.
+Default is **manual**: at `Agreement Signed` the scanner texts the candidate and
+sets `Gusto Status` = `Invited`. When they finish Gusto, set `Gusto Status` =
+`Complete` — via `POST /onboarding/gusto-status` `{email, status}` with
+`X-Interviewer-Secret`, or an Airtable button. The next scan advances to
+`Payment Setup Done`. **[CONFIRM]** manual vs Gusto API/Make. **[DECISION]** is
+there a paper-check fallback, or is direct deposit mandatory
+(`DIRECT_DEPOSIT_MANDATORY`)? A "no bank account" reply is flagged for you.
 
 ### Deployment-data form (Step 4)
 
-Put the lean form (Airtable form view or your own) at `ONBOARDING_DATA_FORM_URL`.
-Wire its submission to `POST {PUBLIC_BASE_URL}/onboarding/deployment-data` with
-`{ email, availability, roles, transport, attireSize, hasBlackAttire, certs }`.
-When all fields are present the candidate flips to **`USN Complete`**.
-**[DECISION]** default collects this **after signing**; move it up-front at
-application if you prefer fewer steps.
+Put the lean form (Airtable form view or your own) at `ONBOARDING_DATA_FORM_URL`;
+wire its submission to `POST {PUBLIC_BASE_URL}/onboarding/deployment-data` with
+`{ email, availability[], roles[], certs[], hasTransport, shirtSize, hasBlackAttire }`.
+Counts as done once **Availability and Roles** are filled (the minimum to book);
+sizes/certs can be chased later. Then the candidate flips to **`USN Complete`**.
 
-## 4c. kloqd (Steps 5–6) — BLOCKED until you have these six facts
+### STOP / opt-out + inbound SMS
 
-Steps 5–6 cannot be safely built on guesses, so the push **fails loudly** until
-configured. Get these from kloqd, then fill the env vars:
+Point your SMS provider's inbound webhook at
+`{PUBLIC_BASE_URL}/webhooks/sms-inbound` (secret `SMS_INBOUND_SECRET`). A body
+starting with **STOP** matches the candidate by phone (or email) → `Opted Out`,
+voids any open envelope, and halts all USN messaging.
+
+### Weekly digest
+
+Wire a **Monday 8am ET** cron to `POST {PUBLIC_BASE_URL}/tasks/weekly-digest`
+(e.g. a scheduled GitHub Action or your host's scheduler). It emails/texts the
+owner (`DIGEST_EMAIL` / `DIGEST_PHONE`) counts by status, stalls ranked
+closest-to-done, who's about to stall (5+ days in stage), and this week's new
+`Deployable` count.
+
+## 4c. kloqd (Step 5) — Phase A now, Phase B blocked
+
+**Phase A (buildable now):** at `USN Complete` the scanner texts the candidate
+the kloqd signup URL + agency join code and flips to `Sent to kloqd`. You only
+need two facts:
+
+- **USN's agency join code** → `KLOQD_AGENCY_JOIN_CODE` **[CONFIRM]**
+- **The signup URL** → `KLOQD_SIGNUP_URL` **[CONFIRM]** (defaulted)
+
+**Step 6 (Deployable):** until a kloqd completion webhook exists, flip manually
+from your kloqd dashboard via `POST /onboarding/mark-deployable` `{email}` with
+`X-Interviewer-Secret`. That sends the welcome SMS.
+
+**Phase B (BLOCKED):** the automated pre-fill push needs four more facts. It
+stays off (Phase A still works) until `KLOQD_API_URL` + `KLOQD_AUTH_TOKEN` are
+set. When attempted unconfigured it fails loudly rather than guessing:
 
 1. **Create/pre-stage worker endpoint** → `KLOQD_API_URL`
-2. **Auth method** for that endpoint → `KLOQD_AUTH_TOKEN`
-3. **Exact fields kloqd accepts (+ names)** → reconcile the field map in
-   `src/kloqd/client.ts` (`pushWorker`)
-4. **Whether agreement-accepted state can be passed in** (so kloqd doesn't
-   re-ask for the legal paperwork USN already did) → same field map
-5. **USN's agency join code** → `KLOQD_AGENCY_JOIN_CODE`
+2. **Auth method** → `KLOQD_AUTH_TOKEN`
+3. **Exact accepted fields (+ names)** → reconcile `src/kloqd/client.ts`
+4. **Agreement-accepted passthrough** (so kloqd doesn't re-ask for legal) → same
+5. **Join code** (shared with Phase A) → `KLOQD_AGENCY_JOIN_CODE`
 6. **Worker-onboarding-complete signal** (webhook vs poll) →
    `KLOQD_COMPLETION_MODE`; if webhook, point kloqd at
    `{PUBLIC_BASE_URL}/webhooks/kloqd` and set `KLOQD_WEBHOOK_SECRET`
-
-Until `KLOQD_API_URL` + `KLOQD_AUTH_TOKEN` are set, candidates stay at
-`USN Complete` and each scan logs the block — nothing is invented.
 
 ---
 
@@ -258,10 +304,15 @@ Copy `.env.example` → `.env` and fill these in:
 | `REMINDER_DAY_2` / `REMINDER_DAY_4` | Reminder cadence (defaults 2 / 4 days). |
 | `SCHEDULER_INTERVAL_MINUTES` / `SCHEDULER_ENABLED` | How often / whether to scan. |
 | `NOTIFIER_PROVIDER` / `NOTIFIER_API_KEY` / `NOTIFIER_FROM_*` | Step 4. |
+| `AIRTABLE_FIELD_*` / `AIRTABLE_TS_*` | Onboarding field + timestamp column names (1a). |
 | `ONBOARDING_SCAN_ENABLED` / `ONBOARDING_DATA_FORM_URL` | Step 4b. |
+| `DIRECT_DEPOSIT_MANDATORY` | Step 4b **[DECISION]** (paper-check policy). |
+| `SMS_INBOUND_SECRET` | Step 4b (STOP webhook) — random string you choose. |
+| `DIGEST_EMAIL` / `DIGEST_PHONE` / `DIGEST_ENABLED` | Step 4b (weekly digest). |
 | `DOCUSIGN_*` | Step 4b (DocuSign). `DOCUSIGN_ICA_TEMPLATE_ID` is **[CONFIRM]**. |
 | `GUSTO_MODE` | Step 4b (Gusto). `manual` by default. |
-| `KLOQD_*` | Step 4c — leave blank to keep the push blocked. |
+| `KLOQD_SIGNUP_URL` / `KLOQD_AGENCY_JOIN_CODE` | Step 4c Phase A **[CONFIRM]**. |
+| `KLOQD_API_URL` / `KLOQD_AUTH_TOKEN` / `KLOQD_*` | Step 4c Phase B — blank keeps it blocked. |
 
 ---
 

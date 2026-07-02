@@ -1,19 +1,24 @@
 import {
+  GUSTO_STATUS_OPTIONS,
   ONBOARDING_STATUS,
   onboardingRank,
+  isParkingState,
   type Candidate,
   type DeploymentData,
 } from "../domain.js";
 
 /**
  * PURE onboarding-spine logic. The `Onboarding Status` field is the spine; each
- * value is the TRIGGER for exactly one automated action. Keeping this as a pure
- * function makes the whole state machine unit-testable without Airtable.
+ * value implies at most one automated forward action. Nudges/stalls are handled
+ * separately (see plan.ts). Keeping this pure makes the state machine testable
+ * without Airtable.
  */
 export type ScanAction =
-  | "send_agreement" // Ready to Onboard  → send DocuSign ICA (+W-9)
-  | "advance_payment" // Agreement Signed + Gusto done → Payment Setup Done
-  | "push_kloqd" // USN Complete       → push to kloqd
+  | "send_agreement" // Ready to Onboard              → send DocuSign ICA (+W-9)
+  | "gusto_invite" // Agreement Signed, not invited    → fire Gusto invite
+  | "advance_payment" // Agreement Signed, Gusto done  → Payment Setup Done
+  | "send_deployment_form" // Payment Setup Done, unsent → text the form
+  | "handoff_kloqd" // USN Complete                    → Phase A join-code SMS
   | "none";
 
 /** Decide the single automated action implied by a candidate's current state. */
@@ -22,31 +27,39 @@ export function scanAction(c: Candidate): ScanAction {
     case ONBOARDING_STATUS.READY_TO_ONBOARD:
       return "send_agreement";
     case ONBOARDING_STATUS.AGREEMENT_SIGNED:
-      // Gusto is manual by default: only advance once the checkbox is ticked.
-      return c.gustoSetupComplete ? "advance_payment" : "none";
+      if (c.gustoStatus === "Complete") return "advance_payment";
+      // Not yet invited (empty or "Not Invited") → fire the invite once.
+      if (c.gustoStatus !== "Invited") return "gusto_invite";
+      return "none"; // Invited, waiting — nudges take over.
+    case ONBOARDING_STATUS.PAYMENT_SETUP_DONE:
+      return c.deploymentFormSent ? "none" : "send_deployment_form";
     case ONBOARDING_STATUS.USN_COMPLETE:
-      return "push_kloqd";
+      return "handoff_kloqd";
     default:
       return "none";
   }
 }
 
-/** The lean deployment-data set required before a candidate is USN Complete. */
+/**
+ * Deployment data counts as complete once Availability AND Roles are filled —
+ * the minimum needed to book anyone. Sizes/certs can be chased later.
+ */
 export function isDeploymentDataComplete(d: DeploymentData): boolean {
-  return Boolean(
-    d.availability &&
-      d.roles &&
-      d.transport &&
-      d.attireSize &&
-      d.certs !== undefined &&
-      d.hasBlackAttire !== undefined
-  );
+  return Boolean(d.availability?.length && d.roles?.length);
 }
 
 /**
- * Guard against backward/duplicate status flips. A flip is allowed only when it
- * moves strictly forward along the spine (or sets the very first state).
+ * Guard status flips. Linear steps may only move strictly forward. Flipping to
+ * a parking state (Stalled / Opted Out) is always allowed. Re-engagement out of
+ * a parking state is handled explicitly (resumeStatus), not here.
  */
 export function canFlipTo(current: string | undefined, next: string): boolean {
+  if (isParkingState(next)) return true;
+  if (isParkingState(current)) return false; // resume path handles this
   return onboardingRank(next) > onboardingRank(current);
+}
+
+/** Valid Gusto status values (guard for the manual/webhook update). */
+export function isGustoStatus(v: string): boolean {
+  return (GUSTO_STATUS_OPTIONS as readonly string[]).includes(v);
 }

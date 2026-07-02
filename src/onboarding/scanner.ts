@@ -1,76 +1,81 @@
-import { listByOnboardingStatus } from "../airtable/candidates.js";
-import { ONBOARDING_STATUS, type Candidate } from "../domain.js";
-import { KloqdNotConfiguredError } from "../kloqd/client.js";
+import { listAllInOnboarding } from "../airtable/candidates.js";
+import { type Candidate } from "../domain.js";
 import { log } from "../lib/logger.js";
+import { nextNudgeAction } from "./plan.js";
 import {
   advancePaymentSetup,
-  pushToKloqd,
+  fireGustoInvite,
+  handoffToKloqd,
   sendContractorAgreement,
+  sendDeploymentForm,
+  sendNudge,
+  stall,
 } from "./service.js";
 import { scanAction } from "./spine.js";
 
 /**
- * One pass of the status-driven onboarding scanner. For each candidate sitting
- * at an actionable status, runs the single action that status implies. The
- * action flips the status forward, so the same record is never processed twice
- * — the scan is idempotent across ticks and restarts.
- *
- * kloqd pushes (Step 5) are intentionally allowed to fail loudly-but-softly:
- * when kloqd is unconfigured the candidate stays at USN Complete and we log the
- * block rather than crashing the scan.
+ * One pass of the onboarding scanner. For each candidate in the onboarding
+ * stage: run the forward action its status implies (idempotent — each action
+ * advances state via a persisted flag/status, so it never repeats); if no
+ * action is due, evaluate the nudge/stall plan. Actions take priority over
+ * nudges so a candidate is never both advanced and nudged in the same tick.
  */
 export async function runOnboardingScan(
   now: Date = new Date()
-): Promise<{ scanned: number; acted: number; blocked: number }> {
-  const statuses = [
-    ONBOARDING_STATUS.READY_TO_ONBOARD,
-    ONBOARDING_STATUS.AGREEMENT_SIGNED,
-    ONBOARDING_STATUS.USN_COMPLETE,
-  ];
-
-  let scanned = 0;
+): Promise<{ scanned: number; acted: number; nudged: number; stalled: number }> {
+  const candidates = await listAllInOnboarding();
   let acted = 0;
-  let blocked = 0;
+  let nudged = 0;
+  let stalled = 0;
 
-  for (const status of statuses) {
-    const candidates = await listByOnboardingStatus(status);
-    scanned += candidates.length;
-    for (const c of candidates) {
-      try {
-        const did = await act(c);
-        if (did) acted++;
-      } catch (err) {
-        if (err instanceof KloqdNotConfiguredError) {
-          blocked++;
-          log.warn("onboarding scan: kloqd push blocked", {
-            email: c.email,
-            detail: err.message.split("\n")[0],
-          });
-        } else {
-          log.error("onboarding scan: action failed", {
-            email: c.email,
-            status: c.onboardingStatus,
-            error: String(err),
-          });
-        }
+  for (const c of candidates) {
+    try {
+      if (await runAction(c, now)) {
+        acted++;
+        continue;
       }
+      const decision = nextNudgeAction(c, now);
+      if (decision.type === "nudge") {
+        await sendNudge(c, decision.nextCount, now);
+        nudged++;
+      } else if (decision.type === "stall") {
+        await stall(c, decision.stallStage, now);
+        stalled++;
+      }
+    } catch (err) {
+      log.error("onboarding scan: candidate failed", {
+        email: c.email,
+        status: c.onboardingStatus,
+        error: String(err),
+      });
     }
   }
 
-  log.info("onboarding scan complete", { scanned, acted, blocked });
-  return { scanned, acted, blocked };
+  log.info("onboarding scan complete", {
+    scanned: candidates.length,
+    acted,
+    nudged,
+    stalled,
+  });
+  return { scanned: candidates.length, acted, nudged, stalled };
 }
 
-async function act(c: Candidate): Promise<boolean> {
+async function runAction(c: Candidate, now: Date): Promise<boolean> {
   switch (scanAction(c)) {
     case "send_agreement":
-      await sendContractorAgreement(c);
+      await sendContractorAgreement(c, now);
+      return true;
+    case "gusto_invite":
+      await fireGustoInvite(c, now);
       return true;
     case "advance_payment":
-      await advancePaymentSetup(c);
+      await advancePaymentSetup(c, now);
       return true;
-    case "push_kloqd":
-      await pushToKloqd(c);
+    case "send_deployment_form":
+      await sendDeploymentForm(c, now);
+      return true;
+    case "handoff_kloqd":
+      await handoffToKloqd(c, now);
       return true;
     default:
       return false;

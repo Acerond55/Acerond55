@@ -70,11 +70,14 @@ src/
     sequence.ts          startOnboarding + runReminders
     scheduler.ts         Lightweight scheduler (reminders + onboarding scan)
   onboarding/
-    spine.ts             PURE onboarding state machine (scanAction, flip guards)
-    service.ts           Step handlers (agreement, signed, payment, data, kloqd)
-    scanner.ts           Status-driven idempotent onboarding scan
+    spine.ts             PURE state machine (scanAction, deployment rule, flip guards)
+    plan.ts              PURE nudge/stall engine (per-stage cadence + give-up)
+    messages.ts          Bilingual (EN/ES) SMS copy per touchpoint
+    service.ts           Step handlers, nudges, stalls, STOP/opt-out, edge cases
+    scanner.ts           Status-driven idempotent scan (actions + nudges)
+    digest.ts            PURE weekly-digest computation + send
   docusign/signer.ts     AgreementSigner interface + console/example adapters
-  kloqd/client.ts        kloqd client — BLOCKED until the six facts are configured
+  kloqd/client.ts        kloqd client — Phase B BLOCKED until the six facts land
   public/apply.html      Candidate-facing choice screen
   scripts/checkStatusOptions.ts   Standalone Airtable preflight
 content/
@@ -127,11 +130,14 @@ Set `DRY_RUN=false` only when you're ready for real writes and sends.
 | POST | `/webhooks/calendly` | Calendly `invitee.created` / no-show (HMAC verified) |
 | POST | `/call-outcome` | Interviewer marks a live call pass/fail (`X-Interviewer-Secret`) |
 | POST | `/tasks/run-reminders` | Run the reminder scan now (for external cron) |
-| POST | `/webhooks/docusign` | DocuSign Connect envelope-completed → Agreement Signed |
-| POST | `/onboarding/gusto-done` | Mark Gusto setup complete (`X-Interviewer-Secret`) |
+| POST | `/webhooks/docusign` | DocuSign Connect: completed / declined / bounced |
+| POST | `/onboarding/gusto-status` | Set Gusto Status (`X-Interviewer-Secret`) |
 | POST | `/onboarding/deployment-data` | Submit lean deployment data → USN Complete |
+| POST | `/onboarding/mark-deployable` | Manual Deployable flip (`X-Interviewer-Secret`) |
 | POST | `/webhooks/kloqd` | kloqd worker-onboarding-complete → Deployable |
+| POST | `/webhooks/sms-inbound` | Inbound SMS; **STOP** → Opted Out (halts all) |
 | POST | `/tasks/run-onboarding` | Run the onboarding scan now (for external cron) |
+| POST | `/tasks/weekly-digest` | Send the owner's Monday digest (wire a cron) |
 
 ## Onboarding stage (post-screening)
 
@@ -143,27 +149,37 @@ Ready to Onboard → Agreement Sent → Agreement Signed → Payment Setup Done 
 USN Complete → Sent to kloqd → Deployable
 ```
 
-- **Step 1 (DocuSign):** the scanner sends the ICA (+ Schedule A, optionally the
-  W-9 in the same envelope), stores the envelope id, flips to `Agreement Sent`.
-- **Step 2 (DocuSign webhook):** envelope completed → `Agreement Signed`.
-- **Step 3 (Gusto):** Gusto sends its own invite (manual by default); tick
-  `Gusto Setup Complete` and the scan advances to `Payment Setup Done` and texts
-  the deployment-data form.
-- **Step 4 (lean data):** availability, roles, transport, attire, certs →
-  `USN Complete` once complete.
-- **Steps 5–6 (kloqd):** push the worker to kloqd → `Sent to kloqd`, then kloqd's
-  completion signal → `Deployable`.
+plus two **parking states** — `Onboarding Stalled` (gave up chasing, kept for
+re-engagement) and `Opted Out` (replied STOP). Steps:
 
-The spine is driven by a status-keyed scanner (idempotent: each action flips the
-status forward, so records are never processed twice) plus webhooks for the
-externally-driven transitions. DocuSign sits behind an `AgreementSigner`
-interface (console default + example adapter), exactly like the Notifier.
+- **Step 1 (DocuSign):** the scanner sends the ICA + W-9 (one envelope), stores
+  the envelope id, flips to `Agreement Sent`.
+- **Step 2 (DocuSign webhook):** completed → `Agreement Signed`; **declined** →
+  Stalled + flag for a personal call; **bounce** → SMS for a better email.
+- **Step 3 (Gusto):** scanner texts the invite and sets `Gusto Status=Invited`;
+  when you set it to `Complete` the scan advances to `Payment Setup Done`.
+- **Step 4 (lean data):** availability, roles, transport, shirt size, attire,
+  certs, language → `USN Complete` once **Availability + Roles** are filled.
+- **Step 5 (kloqd):** **Phase A (now)** texts the signup URL + join code →
+  `Sent to kloqd`. **Phase B (blocked)** pre-fills via the kloqd API first.
+- **Step 6:** kloqd completion webhook (or a manual flip) → `Deployable` + a
+  welcome SMS.
 
-> **kloqd is intentionally BLOCKED** until six facts are known (push endpoint,
-> auth, field map, agreement-accepted passthrough, agency join code, completion
-> signal). Until `KLOQD_API_URL` + `KLOQD_AUTH_TOKEN` are set, candidates hold at
-> `USN Complete` and each scan logs the block — nothing is built on guesses. See
-> `SETUP_CHECKLIST.md › 4c`.
+Driven by a status-keyed, idempotent scanner that also runs the **nudge/stall
+engine**: per-stage reminder cadences (e.g. 48h/96h) with a give-up day that
+parks non-responders in `Onboarding Stalled` (recording where they froze). A
+nudge counter on the record (reset per stage) plus a same-day guard means no
+reminder ever double-sends. Every touchpoint has **English + Spanish** copy
+chosen by `Preferred Language`, and all SMS carry **STOP** handling — a STOP
+anywhere → `Opted Out`, voids any open envelope, halts everything. Per-stage
+**timestamps** are written for funnel analytics, surfaced in the **weekly
+digest** (`POST /tasks/weekly-digest`, wire a Monday-8am-ET cron).
+
+> **kloqd Phase B is intentionally BLOCKED** until six facts are known (push
+> endpoint, auth, field map, agreement-accepted passthrough, join code,
+> completion signal). Phase A ships without them; Phase B stays off until
+> `KLOQD_API_URL` + `KLOQD_AUTH_TOKEN` are set — nothing is built on guesses.
+> See `SETUP_CHECKLIST.md › 4c`.
 
 ## Scoring gate
 
@@ -217,9 +233,12 @@ Covers the critical logic paths:
 1. **Scoring gate** — pass/review/fail bucketing incl. null → review.
 2. **Reminder idempotency** — no double sends; missed-tick recovery.
 3. **Status-option safety check** — detects missing options with exact names
-   (now covering the `Onboarding Status` spine too).
-4. **Onboarding spine** — `scanAction` transitions, deployment-data
-   completeness, and forward-only (no-regression) status flips.
+   (covers the 9-state spine and every onboarding select field).
+4. **Onboarding spine** — `scanAction` transitions, deployment-data rule
+   (Availability + Roles), forward-only flips, parking-state guards.
+5. **Nudge/stall engine** — per-stage cadence, idempotent counter, same-day
+   guard, give-up → stall with the right stall stage.
+6. **Weekly digest** — counts, stall ranking, about-to-stall, new Deployable.
 
 ## Next steps (human dashboard work)
 

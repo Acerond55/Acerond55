@@ -45,19 +45,36 @@ export const config = {
       onboardingSentAt: str("AIRTABLE_FIELD_ONBOARDING_SENT_AT", "Onboarding Sent At"),
       reminderStage: str("AIRTABLE_FIELD_REMINDER_STAGE", "Reminder Stage"),
       onboardingCompleted: str("AIRTABLE_FIELD_ONBOARDING_COMPLETED", "Onboarding Completed"),
+      phone: str("AIRTABLE_FIELD_PHONE", "Phone"),
+      preferredLanguage: str("AIRTABLE_FIELD_PREFERRED_LANGUAGE", "Preferred Language"),
       // Onboarding stage
       onboardingStatus: str("AIRTABLE_FIELD_ONBOARDING_STATUS", "Onboarding Status"),
       docusignEnvelopeId: str("AIRTABLE_FIELD_DOCUSIGN_ENVELOPE_ID", "DocuSign Envelope ID"),
-      agreementSignedAt: str("AIRTABLE_FIELD_AGREEMENT_SIGNED_AT", "Agreement Signed At"),
-      gustoSetupComplete: str("AIRTABLE_FIELD_GUSTO_SETUP_COMPLETE", "Gusto Setup Complete"),
+      gustoStatus: str("AIRTABLE_FIELD_GUSTO_STATUS", "Gusto Status"),
+      deploymentFormSent: str("AIRTABLE_FIELD_DEPLOYMENT_FORM_SENT", "Deployment Form Sent"),
+      deploymentFormDone: str("AIRTABLE_FIELD_DEPLOYMENT_FORM_DONE", "Deployment Form Done"),
+      onboardingNudgeCount: str("AIRTABLE_FIELD_ONBOARDING_NUDGE_COUNT", "Onboarding Nudge Count"),
+      lastNudgeDate: str("AIRTABLE_FIELD_LAST_NUDGE_DATE", "Last Nudge Date"),
+      stallStage: str("AIRTABLE_FIELD_STALL_STAGE", "Stall Stage"),
       availability: str("AIRTABLE_FIELD_AVAILABILITY", "Availability"),
       roles: str("AIRTABLE_FIELD_ROLES", "Roles"),
-      transport: str("AIRTABLE_FIELD_TRANSPORT", "Transport"),
-      attireSize: str("AIRTABLE_FIELD_ATTIRE_SIZE", "Attire Size"),
+      hasTransport: str("AIRTABLE_FIELD_HAS_TRANSPORT", "Has Transport"),
+      shirtSize: str("AIRTABLE_FIELD_SHIRT_SIZE", "Shirt Size"),
       hasBlackAttire: str("AIRTABLE_FIELD_HAS_BLACK_ATTIRE", "Has Black Attire"),
       certs: str("AIRTABLE_FIELD_CERTS", "Certs"),
       kloqdWorkerId: str("AIRTABLE_FIELD_KLOQD_WORKER_ID", "kloqd Worker ID"),
     },
+    // Per-stage timestamp field names, keyed by the status value entered.
+    timestamps: {
+      "Ready to Onboard": str("AIRTABLE_TS_READY_TO_ONBOARD", "TS Ready to Onboard"),
+      "Agreement Sent": str("AIRTABLE_TS_AGREEMENT_SENT", "TS Agreement Sent"),
+      "Agreement Signed": str("AIRTABLE_TS_AGREEMENT_SIGNED", "TS Agreement Signed"),
+      "Payment Setup Done": str("AIRTABLE_TS_PAYMENT_SETUP_DONE", "TS Payment Setup Done"),
+      "USN Complete": str("AIRTABLE_TS_USN_COMPLETE", "TS USN Complete"),
+      "Sent to kloqd": str("AIRTABLE_TS_SENT_TO_KLOQD", "TS Sent to kloqd"),
+      "Deployable": str("AIRTABLE_TS_DEPLOYABLE", "TS Deployable"),
+      "Onboarding Stalled": str("AIRTABLE_TS_STALLED", "TS Stalled"),
+    } as Record<string, string>,
   },
 
   videoask: {
@@ -100,6 +117,14 @@ export const config = {
     scanEnabled: bool("ONBOARDING_SCAN_ENABLED", true),
     // URL of the lean deployment-data form, texted after payment setup.
     dataFormUrl: str("ONBOARDING_DATA_FORM_URL", "https://example.com/usn-deployment-form"),
+    // Whether direct deposit is mandatory (no paper-check fallback). [DECISION]
+    directDepositMandatory: bool("DIRECT_DEPOSIT_MANDATORY", true),
+    // Shared secret for the inbound-SMS webhook (STOP handling).
+    smsInboundSecret: str("SMS_INBOUND_SECRET"),
+    // Weekly digest recipient (the owner). Sent Monday ~8am ET.
+    digestEmail: str("DIGEST_EMAIL"),
+    digestPhone: str("DIGEST_PHONE"),
+    digestEnabled: bool("DIGEST_ENABLED", true),
   },
 
   docusign: {
@@ -119,11 +144,12 @@ export const config = {
   },
 
   kloqd: {
-    // ALL of these are load-bearing [CONFIRM, from kloqd] facts. Until apiUrl
-    // and authToken are set, the kloqd push is BLOCKED and fails loudly.
+    // Phase A (buildable now): the candidate self-finishes via join code.
+    signupUrl: str("KLOQD_SIGNUP_URL", "https://app.kloqd.com/signup"),
+    agencyJoinCode: str("KLOQD_AGENCY_JOIN_CODE"), // [CONFIRM] shared by A + B
+    // Phase B (blocked): automated pre-fill push. apiUrl + authToken gate it.
     apiUrl: str("KLOQD_API_URL"),
     authToken: str("KLOQD_AUTH_TOKEN"),
-    agencyJoinCode: str("KLOQD_AGENCY_JOIN_CODE"),
     completionMode: str("KLOQD_COMPLETION_MODE", "webhook"), // "webhook" | "poll"
     webhookSecret: str("KLOQD_WEBHOOK_SECRET"),
   },

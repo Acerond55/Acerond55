@@ -1,8 +1,16 @@
 import { config } from "../config.js";
 import {
+  AVAILABILITY_OPTIONS,
+  CERTS_OPTIONS,
+  GUSTO_STATUS_OPTIONS,
+  HAS_TRANSPORT_OPTIONS,
+  PREFERRED_LANGUAGE_OPTIONS,
   REQUIRED_ONBOARDING_STATUS_OPTIONS,
   REQUIRED_SCREEN_TYPE_OPTIONS,
   REQUIRED_STATUS_OPTIONS,
+  ROLES_OPTIONS,
+  SHIRT_SIZE_OPTIONS,
+  STALL_STAGE_OPTIONS,
 } from "../domain.js";
 import { getBaseSchema, type TableSchema } from "./client.js";
 
@@ -13,12 +21,19 @@ import { getBaseSchema, type TableSchema } from "./client.js";
  * them we verify they exist and fail loudly with instructions if they do not.
  */
 export function requiredOptionsByField(): Record<string, string[]> {
+  const f = config.airtable.fields;
   return {
-    [config.airtable.fields.status]: [...REQUIRED_STATUS_OPTIONS],
-    [config.airtable.fields.screenType]: [...REQUIRED_SCREEN_TYPE_OPTIONS],
-    [config.airtable.fields.onboardingStatus]: [
-      ...REQUIRED_ONBOARDING_STATUS_OPTIONS,
-    ],
+    [f.status]: [...REQUIRED_STATUS_OPTIONS],
+    [f.screenType]: [...REQUIRED_SCREEN_TYPE_OPTIONS],
+    [f.onboardingStatus]: [...REQUIRED_ONBOARDING_STATUS_OPTIONS],
+    [f.stallStage]: [...STALL_STAGE_OPTIONS],
+    [f.gustoStatus]: [...GUSTO_STATUS_OPTIONS],
+    [f.availability]: [...AVAILABILITY_OPTIONS],
+    [f.roles]: [...ROLES_OPTIONS],
+    [f.hasTransport]: [...HAS_TRANSPORT_OPTIONS],
+    [f.shirtSize]: [...SHIRT_SIZE_OPTIONS],
+    [f.certs]: [...CERTS_OPTIONS],
+    [f.preferredLanguage]: [...PREFERRED_LANGUAGE_OPTIONS],
   };
 }
 
