@@ -36,44 +36,41 @@ export const config = {
     candidatesTable: str("AIRTABLE_CANDIDATES_TABLE", "Candidates"),
     fields: {
       email: str("AIRTABLE_FIELD_EMAIL", "Email"),
-      name: str("AIRTABLE_FIELD_NAME", "Name"),
-      status: str("AIRTABLE_FIELD_STATUS", "Status"),
-      screenType: str("AIRTABLE_FIELD_SCREEN_TYPE", "Screen Type"),
-      answers: str("AIRTABLE_FIELD_ANSWERS", "Answers"),
-      score: str("AIRTABLE_FIELD_SCORE", "Score"),
-      scoreNotes: str("AIRTABLE_FIELD_SCORE_NOTES", "Score Notes"),
-      onboardingSentAt: str("AIRTABLE_FIELD_ONBOARDING_SENT_AT", "Onboarding Sent At"),
-      reminderStage: str("AIRTABLE_FIELD_REMINDER_STAGE", "Reminder Stage"),
-      onboardingCompleted: str("AIRTABLE_FIELD_ONBOARDING_COMPLETED", "Onboarding Completed"),
+      name: str("AIRTABLE_FIELD_NAME", "Full Name"),
       phone: str("AIRTABLE_FIELD_PHONE", "Phone"),
       preferredLanguage: str("AIRTABLE_FIELD_PREFERRED_LANGUAGE", "Preferred Language"),
-      // Onboarding stage
-      onboardingStatus: str("AIRTABLE_FIELD_ONBOARDING_STATUS", "Onboarding Status"),
+      // One Status field drives the whole pipeline.
+      status: str("AIRTABLE_FIELD_STATUS", "Status"),
+      tier: str("AIRTABLE_FIELD_TIER", "Tier"),
+      answers: str("AIRTABLE_FIELD_ANSWERS", "Phone Screen Notes"),
+      scoreNotes: str("AIRTABLE_FIELD_SCORE_NOTES", "Notes"),
+      // Onboarding operational fields (added to your base).
       docusignEnvelopeId: str("AIRTABLE_FIELD_DOCUSIGN_ENVELOPE_ID", "DocuSign Envelope ID"),
-      gustoStatus: str("AIRTABLE_FIELD_GUSTO_STATUS", "Gusto Status"),
+      gustoInvited: str("AIRTABLE_FIELD_GUSTO_INVITED", "Gusto Invited"),
       deploymentFormSent: str("AIRTABLE_FIELD_DEPLOYMENT_FORM_SENT", "Deployment Form Sent"),
-      deploymentFormDone: str("AIRTABLE_FIELD_DEPLOYMENT_FORM_DONE", "Deployment Form Done"),
       onboardingNudgeCount: str("AIRTABLE_FIELD_ONBOARDING_NUDGE_COUNT", "Onboarding Nudge Count"),
       lastNudgeDate: str("AIRTABLE_FIELD_LAST_NUDGE_DATE", "Last Nudge Date"),
+      lastStatusChange: str("AIRTABLE_FIELD_LAST_STATUS_CHANGE", "Last Status Change"),
       stallStage: str("AIRTABLE_FIELD_STALL_STAGE", "Stall Stage"),
+      // Deployment data (reuse existing base fields where they exist).
       availability: str("AIRTABLE_FIELD_AVAILABILITY", "Availability"),
       roles: str("AIRTABLE_FIELD_ROLES", "Roles"),
-      hasTransport: str("AIRTABLE_FIELD_HAS_TRANSPORT", "Has Transport"),
+      hasTransport: str("AIRTABLE_FIELD_HAS_TRANSPORT", "Has Transportation"),
       shirtSize: str("AIRTABLE_FIELD_SHIRT_SIZE", "Shirt Size"),
-      hasBlackAttire: str("AIRTABLE_FIELD_HAS_BLACK_ATTIRE", "Has Black Attire"),
+      hasBlackAttire: str("AIRTABLE_FIELD_HAS_BLACK_ATTIRE", "Has Banquet Attire"),
       certs: str("AIRTABLE_FIELD_CERTS", "Certs"),
       kloqdWorkerId: str("AIRTABLE_FIELD_KLOQD_WORKER_ID", "kloqd Worker ID"),
     },
-    // Per-stage timestamp field names, keyed by the status value entered.
-    timestamps: {
-      "Ready to Onboard": str("AIRTABLE_TS_READY_TO_ONBOARD", "TS Ready to Onboard"),
-      "Agreement Sent": str("AIRTABLE_TS_AGREEMENT_SENT", "TS Agreement Sent"),
-      "Agreement Signed": str("AIRTABLE_TS_AGREEMENT_SIGNED", "TS Agreement Signed"),
-      "Payment Setup Done": str("AIRTABLE_TS_PAYMENT_SETUP_DONE", "TS Payment Setup Done"),
-      "USN Complete": str("AIRTABLE_TS_USN_COMPLETE", "TS USN Complete"),
-      "Sent to kloqd": str("AIRTABLE_TS_SENT_TO_KLOQD", "TS Sent to kloqd"),
-      "Deployable": str("AIRTABLE_TS_DEPLOYABLE", "TS Deployable"),
-      "Onboarding Stalled": str("AIRTABLE_TS_STALLED", "TS Stalled"),
+    // The single date field that records when a candidate entered their current
+    // status — powers time-in-stage, nudges and stall detection.
+    lastStatusChangeField: str("AIRTABLE_FIELD_LAST_STATUS_CHANGE", "Last Status Change"),
+    // Optional per-milestone date fields (reuse the base's existing columns).
+    milestoneDates: {
+      "Phone Screen Booked": str("AIRTABLE_TS_PHONE_SCREEN", "Phone Screen Date"),
+      "Onboarding - Docs Sent": str("AIRTABLE_TS_DOCS_SENT", "Docs Sent Date"),
+      "Onboarding - Docs Signed": str("AIRTABLE_TS_DOCS_SIGNED", "Docs Signed Date"),
+      "Onboarding - Training Complete": str("AIRTABLE_TS_TRAINING", "Training Complete Date"),
+      "Active": str("AIRTABLE_TS_ACTIVATION", "Activation Date"),
     } as Record<string, string>,
   },
 

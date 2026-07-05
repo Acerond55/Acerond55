@@ -9,7 +9,8 @@ import {
 } from "./client.js";
 
 const F = config.airtable.fields;
-const TS = config.airtable.timestamps;
+const LAST_CHANGE = config.airtable.lastStatusChangeField;
+const MILESTONE = config.airtable.milestoneDates;
 const TABLE = config.airtable.candidatesTable;
 
 /** Escape a value for safe use inside an Airtable filterByFormula string. */
@@ -26,8 +27,6 @@ function strArray(v: unknown): string[] | undefined {
 
 function toCandidate(rec: AirtableRecord): Candidate {
   const f = rec.fields as Record<string, unknown>;
-  const onboardingStatus = str(f[F.onboardingStatus]);
-  const tsField = onboardingStatus ? TS[onboardingStatus] : undefined;
   return {
     id: rec.id,
     email: String(f[F.email] ?? ""),
@@ -35,66 +34,27 @@ function toCandidate(rec: AirtableRecord): Candidate {
     phone: str(f[F.phone]),
     preferredLanguage: str(f[F.preferredLanguage]),
     status: str(f[F.status]),
-    screenType: str(f[F.screenType]),
+    tier: str(f[F.tier]),
     answers: str(f[F.answers]),
-    score: typeof f[F.score] === "number" ? (f[F.score] as number) : undefined,
     scoreNotes: str(f[F.scoreNotes]),
-    onboardingSentAt: str(f[F.onboardingSentAt]),
-    reminderStage:
-      typeof f[F.reminderStage] === "number"
-        ? (f[F.reminderStage] as number)
-        : undefined,
-    onboardingCompleted: Boolean(f[F.onboardingCompleted]),
-    onboardingStatus,
     docusignEnvelopeId: str(f[F.docusignEnvelopeId]),
-    gustoStatus: str(f[F.gustoStatus]),
+    gustoInvited: Boolean(f[F.gustoInvited]),
     deploymentFormSent: Boolean(f[F.deploymentFormSent]),
-    deploymentFormDone: Boolean(f[F.deploymentFormDone]),
     onboardingNudgeCount:
       typeof f[F.onboardingNudgeCount] === "number"
         ? (f[F.onboardingNudgeCount] as number)
         : undefined,
     lastNudgeDate: str(f[F.lastNudgeDate]),
     stallStage: str(f[F.stallStage]),
-    stageEnteredAt: tsField ? str(f[tsField]) : undefined,
+    stageEnteredAt: str(f[LAST_CHANGE]),
     availability: strArray(f[F.availability]),
     roles: strArray(f[F.roles]),
-    hasTransport: str(f[F.hasTransport]),
+    hasTransport: Boolean(f[F.hasTransport]),
     shirtSize: str(f[F.shirtSize]),
     hasBlackAttire: Boolean(f[F.hasBlackAttire]),
     certs: strArray(f[F.certs]),
     kloqdWorkerId: str(f[F.kloqdWorkerId]),
   };
-}
-
-export async function findByEmail(email: string): Promise<Candidate | null> {
-  const formula = `LOWER({${F.email}}) = "${escapeFormulaValue(
-    email.toLowerCase()
-  )}"`;
-  const records = await listRecords(TABLE, {
-    filterByFormula: formula,
-    maxRecords: 1,
-  });
-  const first = records[0];
-  return first ? toCandidate(first) : null;
-}
-
-/**
- * Find a candidate by email, creating a bare record if none exists.
- * Returns the candidate plus whether it was newly created.
- */
-export async function findOrCreateByEmail(
-  email: string,
-  name?: string
-): Promise<{ candidate: Candidate; created: boolean }> {
-  const existing = await findByEmail(email);
-  if (existing) return { candidate: existing, created: false };
-
-  const fields: Record<string, unknown> = { [F.email]: email };
-  if (name) fields[F.name] = name;
-  const rec = await createRecord(TABLE, fields);
-  log.info("created candidate record", { email });
-  return { candidate: toCandidate(rec), created: true };
 }
 
 /** Translate our domain patch keys into the configured Airtable column names. */
@@ -103,29 +63,18 @@ function buildPatchFields(
 ): Record<string, unknown> {
   const fields: Record<string, unknown> = {};
   if (patch.name !== undefined) fields[F.name] = patch.name;
-  if (patch.status !== undefined) fields[F.status] = patch.status;
-  if (patch.screenType !== undefined) fields[F.screenType] = patch.screenType;
-  if (patch.answers !== undefined) fields[F.answers] = patch.answers;
-  if (patch.score !== undefined) fields[F.score] = patch.score;
-  if (patch.scoreNotes !== undefined) fields[F.scoreNotes] = patch.scoreNotes;
-  if (patch.onboardingSentAt !== undefined)
-    fields[F.onboardingSentAt] = patch.onboardingSentAt;
-  if (patch.reminderStage !== undefined)
-    fields[F.reminderStage] = patch.reminderStage;
-  if (patch.onboardingCompleted !== undefined)
-    fields[F.onboardingCompleted] = patch.onboardingCompleted;
   if (patch.phone !== undefined) fields[F.phone] = patch.phone;
   if (patch.preferredLanguage !== undefined)
     fields[F.preferredLanguage] = patch.preferredLanguage;
-  if (patch.onboardingStatus !== undefined)
-    fields[F.onboardingStatus] = patch.onboardingStatus;
+  if (patch.status !== undefined) fields[F.status] = patch.status;
+  if (patch.tier !== undefined) fields[F.tier] = patch.tier;
+  if (patch.answers !== undefined) fields[F.answers] = patch.answers;
+  if (patch.scoreNotes !== undefined) fields[F.scoreNotes] = patch.scoreNotes;
   if (patch.docusignEnvelopeId !== undefined)
     fields[F.docusignEnvelopeId] = patch.docusignEnvelopeId;
-  if (patch.gustoStatus !== undefined) fields[F.gustoStatus] = patch.gustoStatus;
+  if (patch.gustoInvited !== undefined) fields[F.gustoInvited] = patch.gustoInvited;
   if (patch.deploymentFormSent !== undefined)
     fields[F.deploymentFormSent] = patch.deploymentFormSent;
-  if (patch.deploymentFormDone !== undefined)
-    fields[F.deploymentFormDone] = patch.deploymentFormDone;
   if (patch.onboardingNudgeCount !== undefined)
     fields[F.onboardingNudgeCount] = patch.onboardingNudgeCount;
   if (patch.lastNudgeDate !== undefined)
@@ -143,23 +92,44 @@ function buildPatchFields(
   return fields;
 }
 
-/**
- * Patch a candidate record. Accepts our domain field keys; translates to the
- * configured Airtable column names. Unknown/undefined values are skipped.
- */
+export async function findByEmail(email: string): Promise<Candidate | null> {
+  const formula = `LOWER({${F.email}}) = "${escapeFormulaValue(
+    email.toLowerCase()
+  )}"`;
+  const records = await listRecords(TABLE, {
+    filterByFormula: formula,
+    maxRecords: 1,
+  });
+  const first = records[0];
+  return first ? toCandidate(first) : null;
+}
+
+export async function findOrCreateByEmail(
+  email: string,
+  name?: string
+): Promise<{ candidate: Candidate; created: boolean }> {
+  const existing = await findByEmail(email);
+  if (existing) return { candidate: existing, created: false };
+
+  const fields: Record<string, unknown> = { [F.email]: email };
+  if (name) fields[F.name] = name;
+  const rec = await createRecord(TABLE, fields);
+  log.info("created candidate record", { email });
+  return { candidate: toCandidate(rec), created: true };
+}
+
 export async function updateCandidate(
   id: string,
   patch: Partial<Omit<Candidate, "id" | "email">>
 ): Promise<Candidate> {
   const rec = await updateRecord(TABLE, id, buildPatchFields(patch));
-  // In DRY_RUN the returned record only echoes the patch (email may be absent).
   return toCandidate({ id, fields: rec.fields });
 }
 
 /**
- * Flip onboarding status AND stamp the per-stage timestamp field for the new
- * status in one write. Extra patch fields are merged in (e.g. stall stage,
- * nudge-count reset). This is the single place a stage transition is persisted.
+ * Flip status AND stamp the timing fields in one write: Last Status Change (the
+ * universal stage-entry clock), the matching milestone date if the base has one
+ * for that status, and reset the nudge counter (cross-cutting rule 1).
  */
 export async function setOnboardingStatus(
   id: string,
@@ -167,51 +137,33 @@ export async function setOnboardingStatus(
   now: Date,
   extra: Partial<Omit<Candidate, "id" | "email">> = {}
 ): Promise<void> {
-  const fields = buildPatchFields({ onboardingStatus: status, ...extra });
-  const tsField = TS[status];
-  if (tsField) fields[tsField] = now.toISOString();
+  const fields = buildPatchFields({
+    status,
+    onboardingNudgeCount: 0,
+    ...extra,
+  });
+  fields[LAST_CHANGE] = now.toISOString();
+  const milestone = MILESTONE[status];
+  if (milestone) fields[milestone] = now.toISOString();
   await updateRecord(TABLE, id, fields);
 }
 
-/**
- * Candidates who were sent onboarding but have not completed it — the working
- * set for the reminder scheduler.
- */
-export async function listPendingOnboarding(): Promise<Candidate[]> {
-  const formula = `AND({${F.onboardingSentAt}} != "", NOT({${F.onboardingCompleted}}))`;
+/** All candidates currently sitting at a given status value. */
+export async function listByStatus(status: string): Promise<Candidate[]> {
+  const formula = `{${F.status}} = "${escapeFormulaValue(status)}"`;
   const records = await listRecords(TABLE, { filterByFormula: formula });
   return records.map(toCandidate);
 }
 
-/** All candidates currently sitting at a given onboarding-status value. */
-export async function listByOnboardingStatus(
-  status: string
-): Promise<Candidate[]> {
-  const formula = `{${F.onboardingStatus}} = "${escapeFormulaValue(status)}"`;
+/** All candidates whose status is any of the given values. */
+export async function listByStatuses(statuses: string[]): Promise<Candidate[]> {
+  if (statuses.length === 0) return [];
+  const clauses = statuses
+    .map((s) => `{${F.status}} = "${escapeFormulaValue(s)}"`)
+    .join(", ");
+  const formula = `OR(${clauses})`;
   const records = await listRecords(TABLE, { filterByFormula: formula });
   return records.map(toCandidate);
-}
-
-/** Every candidate that has entered the onboarding stage (any status set). */
-export async function listAllInOnboarding(): Promise<Candidate[]> {
-  const formula = `{${F.onboardingStatus}} != ""`;
-  const records = await listRecords(TABLE, { filterByFormula: formula });
-  return records.map(toCandidate);
-}
-
-/** Find a candidate by phone number — matches on the last 10 digits, so
- *  formatting differences (spaces, dashes, +1) don't matter. For STOP handling. */
-export async function findByPhone(phone: string): Promise<Candidate | null> {
-  const digits = phone.replace(/\D/g, "").slice(-10);
-  if (digits.length < 10) return null;
-  const normalized = `REGEX_REPLACE({${F.phone}} & "", "[^0-9]", "")`;
-  const formula = `RIGHT(${normalized}, 10) = "${digits}"`;
-  const records = await listRecords(TABLE, {
-    filterByFormula: formula,
-    maxRecords: 1,
-  });
-  const first = records[0];
-  return first ? toCandidate(first) : null;
 }
 
 /** Find a candidate by the DocuSign envelope id stored on their record. */
@@ -221,6 +173,20 @@ export async function findByEnvelopeId(
   const formula = `{${F.docusignEnvelopeId}} = "${escapeFormulaValue(
     envelopeId
   )}"`;
+  const records = await listRecords(TABLE, {
+    filterByFormula: formula,
+    maxRecords: 1,
+  });
+  const first = records[0];
+  return first ? toCandidate(first) : null;
+}
+
+/** Find a candidate by phone — matches on the last 10 digits. For STOP handling. */
+export async function findByPhone(phone: string): Promise<Candidate | null> {
+  const digits = phone.replace(/\D/g, "").slice(-10);
+  if (digits.length < 10) return null;
+  const normalized = `REGEX_REPLACE({${F.phone}} & "", "[^0-9]", "")`;
+  const formula = `RIGHT(${normalized}, 10) = "${digits}"`;
   const records = await listRecords(TABLE, {
     filterByFormula: formula,
     maxRecords: 1,

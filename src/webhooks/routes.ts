@@ -1,7 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { config } from "../config.js";
 import { log } from "../lib/logger.js";
-import { runReminders } from "../followup/sequence.js";
 import {
   processCallBooked,
   processCallNoShow,
@@ -93,12 +92,3 @@ router.post("/call-outcome", async (req: Request, res: Response) => {
 });
 
 /** External-cron trigger for the reminder scan (alternative to in-process scheduler). */
-router.post("/tasks/run-reminders", async (_req: Request, res: Response) => {
-  try {
-    const result = await runReminders();
-    return res.json({ ok: true, ...result });
-  } catch (err) {
-    log.error("manual reminder run failed", { error: String(err) });
-    return res.status(500).json({ error: "reminder run failed" });
-  }
-});

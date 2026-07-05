@@ -6,7 +6,6 @@ import {
   updateCandidate,
 } from "../airtable/candidates.js";
 import { config } from "../config.js";
-import { isGustoStatus } from "../onboarding/spine.js";
 import { log } from "../lib/logger.js";
 import { runOnboardingScan } from "../onboarding/scanner.js";
 import { runWeeklyDigest } from "../onboarding/digest.js";
@@ -14,6 +13,7 @@ import {
   handleDecline,
   handleEmailBounce,
   markDeployable,
+  markPaymentSetupDone,
   optOut,
   recordAgreementSigned,
   recordDeploymentData,
@@ -93,20 +93,18 @@ onboardingRouter.post("/webhooks/docusign", async (req: Request, res: Response) 
   }
 });
 
-/** STEP 3 — mark Gusto status (manual or Gusto webhook). Body: { email, status }.
- *  status defaults to "Complete". Airtable-button friendly. */
-onboardingRouter.post("/onboarding/gusto-status", async (req: Request, res: Response) => {
+/** STEP 3 — Gusto/direct-deposit complete → advance to Payment Setup Done.
+ *  Body: { email }. Airtable-button or Gusto-webhook friendly. */
+onboardingRouter.post("/onboarding/payment-done", async (req: Request, res: Response) => {
   if (!interviewerOk(req)) return res.status(401).json({ error: "unauthorized" });
-  const { email, status = "Complete" } = (req.body ?? {}) as Record<string, unknown>;
-  if (typeof email !== "string" || typeof status !== "string" || !isGustoStatus(status)) {
-    return res
-      .status(400)
-      .json({ error: "require { email, status: 'Not Invited'|'Invited'|'Complete' }" });
+  const email = (req.body ?? {}).email;
+  if (typeof email !== "string") {
+    return res.status(400).json({ error: "require { email }" });
   }
   const c = await findByEmail(email);
   if (!c) return res.status(404).json({ error: "candidate not found" });
-  await updateCandidate(c.id, { gustoStatus: status });
-  log.info("gusto status set", { email, status });
+  await markPaymentSetupDone(c);
+  log.info("payment setup marked done", { email });
   return res.json({ ok: true });
 });
 
@@ -123,7 +121,7 @@ onboardingRouter.post("/onboarding/deployment-data", async (req: Request, res: R
       availability: asArr(b.availability),
       roles: asArr(b.roles),
       certs: asArr(b.certs),
-      hasTransport: typeof b.hasTransport === "string" ? b.hasTransport : undefined,
+      hasTransport: typeof b.hasTransport === "boolean" ? b.hasTransport : undefined,
       shirtSize: typeof b.shirtSize === "string" ? b.shirtSize : undefined,
       hasBlackAttire: typeof b.hasBlackAttire === "boolean" ? b.hasBlackAttire : undefined,
     });

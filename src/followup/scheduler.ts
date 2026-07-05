@@ -1,20 +1,18 @@
 import { config } from "../config.js";
 import { log } from "../lib/logger.js";
 import { runOnboardingScan } from "../onboarding/scanner.js";
-import { runReminders } from "./sequence.js";
 
 let timer: ReturnType<typeof setInterval> | null = null;
 let running = false;
 
-/** Run one reminder scan, guarding against overlapping runs. */
+/** Run one onboarding scan (actions + nudges/stalls), guarding overlap. */
 async function tick(): Promise<void> {
   if (running) {
-    log.warn("reminder scan still running — skipping this tick");
+    log.warn("onboarding scan still running — skipping this tick");
     return;
   }
   running = true;
   try {
-    await runReminders();
     if (config.onboarding.scanEnabled) {
       await runOnboardingScan();
     }
@@ -26,9 +24,9 @@ async function tick(): Promise<void> {
 }
 
 /**
- * Start the in-process reminder scheduler. Lightweight by design — a single
- * setInterval, no external queue. Disable with SCHEDULER_ENABLED=false and run
- * POST /tasks/run-reminders from an external cron instead.
+ * Start the in-process onboarding scheduler. Lightweight by design — a single
+ * setInterval, no external queue. Disable with SCHEDULER_ENABLED=false and drive
+ * the scan via POST /tasks/run-onboarding from an external cron instead.
  */
 export function startScheduler(): void {
   if (!config.followup.schedulerEnabled) {
@@ -36,10 +34,9 @@ export function startScheduler(): void {
     return;
   }
   const intervalMs = config.followup.schedulerIntervalMinutes * 60 * 1000;
-  log.info("starting reminder scheduler", {
+  log.info("starting onboarding scheduler", {
     everyMinutes: config.followup.schedulerIntervalMinutes,
   });
-  // Kick once shortly after boot, then on the interval.
   timer = setInterval(() => void tick(), intervalMs);
 }
 

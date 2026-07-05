@@ -12,90 +12,55 @@ testing).
 
 ## 1. Airtable — the system of record
 
-### 1a. Candidate table & fields
+> The code is mapped to your REAL **USN Operations › Candidates** table. Most
+> fields already exist and are reused as-is. You only need to (1c) add a handful
+> of new fields and (1b) add a few new `Status` options by hand.
 
-In the **USN Operations** base, make sure your candidate table (default name
-`Candidates` — set `AIRTABLE_CANDIDATES_TABLE` if different) has these fields.
-Names must match the `AIRTABLE_FIELD_*` env vars (defaults shown):
+### 1a. Fields the code reuses (already in your base — no action)
 
-| Field (default name) | Type | Notes |
-| -------------------- | ---- | ----- |
-| `Email` | Single line text | Lookup key. Required. |
-| `Name` | Single line text | Optional. |
-| `Status` | **Single select** | Options added in 1b. |
-| `Screen Type` | **Single select** | Options: `Video`, `Call`. |
-| `Answers` | Long text | Stores the video transcript / answer references. |
-| `Score` | Number | AI score, 0–100 (blank for manual/call). |
-| `Score Notes` | Long text | Scorer or interviewer notes. |
-| `Onboarding Sent At` | Date (with time) | Set when the onboarding link goes out. |
-| `Reminder Stage` | Number (integer) | 0 = sent, 1 = day-2 done, 2 = day-4 done. |
-| `Onboarding Completed` | Checkbox | Stops the reminder sequence when checked. |
-| `Phone` | Phone / single line text | Used for SMS + STOP matching. |
-| `Preferred Language` | **Single select** | English / Spanish / Either. Options in 1b. |
-| `Onboarding Status` | **Single select** | The onboarding spine. 9 options in 1b. |
-| `DocuSign Envelope ID` | Single line text | Stored when the agreement is sent. |
-| `Gusto Status` | **Single select** | Not Invited / Invited / Complete. |
-| `Deployment Form Sent` | Checkbox | Set when the form is texted. |
-| `Deployment Form Done` | Checkbox | Set when the form is completed. |
-| `Onboarding Nudge Count` | Number (integer) | Reset to 0 on every status flip. |
-| `Last Nudge Date` | Date (with time) | Guards against same-day double-sends. |
-| `Stall Stage` | **Single select** | Where they froze. Options in 1b. |
-| `Availability` | **Multi select** | Weekday Day / Weekday Eve / Sat / Sun. |
-| `Roles` | **Multi select** | Server / Bartender / Busser-Barback / Coat Check / Captain-track. |
-| `Has Transport` | **Single select** | Own car / Rides-transit / Depends on venue. |
-| `Shirt Size` | **Single select** | XS–3XL. |
-| `Has Black Attire` | Checkbox | Has black service attire y/n. |
-| `Certs` | **Multi select** | TIPS / Food Handler / None. |
-| `kloqd Worker ID` | Single line text | Returned by the kloqd push (Phase B). |
-| `TS Ready to Onboard` … `TS Stalled` | Date (with time) | One per stage transition (8 total) for funnel analytics. |
+`Full Name`, `Email`, `Phone`, `Tier`, `Availability`, `Has Transportation`,
+`Has Banquet Attire`, `Phone Screen Notes` (stores screen answers), `Notes`
+(stores score/interviewer notes), and the date columns `Phone Screen Date`,
+`Docs Sent Date`, `Docs Signed Date`, `Training Complete Date`,
+`Activation Date` (reused as per-milestone funnel timestamps).
 
-### 1b. Status single-select options — **add these EXACTLY by hand**
+### 1b. `Status` options to ADD by hand (the API can't create these)
 
-The API cannot reliably create single-select options, so the code **refuses to
-invent them** — it verifies they exist and fails loudly if not. Open the
-`Status` field → *Customize field type* → add each option below with the **exact**
-text (mind the em-dash `—` in "Screened — Pending Review", not a hyphen):
+Your `Status` field already has the base pipeline. Open it → *Customize field
+type* and add these **5 new options** (exact text — note hyphens, not em-dashes):
 
-- `Call Booked`
-- `Call No-Show`
-- `Screened — Pending Review`
-- `Passed`
-- `Failed`
-- `Onboarding Sent`
-- `Onboarding Complete`
-
-On the `Screen Type` field, add these two options:
-
-- `Video`
-- `Call`
-
-On the **`Onboarding Status`** field, add these **nine** options — the seven
-linear spine states in order, then the two parking states:
-
-- `Ready to Onboard`
-- `Agreement Sent`
-- `Agreement Signed`
+- `Phone Screen No-Show`
+- `Screened - Pending Review`
 - `Payment Setup Done`
-- `USN Complete`
 - `Sent to kloqd`
-- `Deployable`
-- `Onboarding Stalled`
 - `Opted Out`
 
-Add the remaining select-field options (the pipeline verifies these too and
-fails loudly if any are missing):
+The pipeline reuses your existing options as its stages: `Phone Screen Booked`,
+`Screened - Pass` (= onboarding entry), `Screened - Decline`,
+`Onboarding - Docs Sent`, `Onboarding - Docs Signed`,
+`Onboarding - Training Complete`, `Active` (= deployable/live), `Stalled`.
 
-- **`Stall Stage`** (mirrors the linear spine): `Ready to Onboard`, `Agreement Sent`, `Agreement Signed`, `Payment Setup Done`, `USN Complete`, `Sent to kloqd`, `Deployable`
-- **`Gusto Status`**: `Not Invited`, `Invited`, `Complete`
-- **`Preferred Language`**: `English`, `Spanish`, `Either`
-- **`Has Transport`**: `Own car`, `Rides-transit`, `Depends on venue`
-- **`Shirt Size`**: `XS`, `S`, `M`, `L`, `XL`, `2XL`, `3XL`
-- **`Availability`** (multi-select): `Weekday Day`, `Weekday Eve`, `Sat`, `Sun`
-- **`Roles`** (multi-select): `Server`, `Bartender`, `Busser-Barback`, `Coat Check`, `Captain-track`
-- **`Certs`** (multi-select): `TIPS`, `Food Handler`, `None`
+### 1c. NEW fields to add to the Candidates table
+
+Add these columns (names must match the `AIRTABLE_FIELD_*` env vars):
+
+| Field | Type | Notes |
+| ----- | ---- | ----- |
+| `Preferred Language` | **Single select** | Options: `English`, `Spanish`, `Either`. |
+| `Roles` | **Multi select** | `Banquet Server`, `Bartender`, `Event Captain`, `Coat Check`, `Barback or Busser`, `Brand Ambassador`. |
+| `Shirt Size` | **Single select** | `XS`, `S`, `M`, `L`, `XL`, `2XL`, `3XL`. |
+| `Certs` | **Multi select** | `TIPS`, `Food Handler`, `None`. |
+| `Stall Stage` | **Single select** | `Screened - Pass`, `Onboarding - Docs Sent`, `Onboarding - Docs Signed`, `Payment Setup Done`, `Onboarding - Training Complete`, `Sent to kloqd`, `Active`. |
+| `DocuSign Envelope ID` | Single line text | Stored when the agreement is sent. |
+| `kloqd Worker ID` | Single line text | Returned by the kloqd push (Phase B). |
+| `Gusto Invited` | Checkbox | Gates the one-time Gusto invite. |
+| `Deployment Form Sent` | Checkbox | Gates the one-time form text. |
+| `Onboarding Nudge Count` | Number (integer) | Reset to 0 on every status flip. |
+| `Last Nudge Date` | Date (with time) | Guards against same-day double-sends. |
+| `Last Status Change` | Date (with time) | Stamped on every flip — powers nudges/stall timing. |
 
 > ✅ **Verify:** run `npm run check:airtable`. It prints `✓ All required Airtable
-> status options are present.` or lists exactly what's missing.
+> status options are present.` or lists exactly what's still missing (by name).
 
 ### 1c. Token
 

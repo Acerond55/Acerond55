@@ -1,9 +1,10 @@
-import { listAllInOnboarding } from "../airtable/candidates.js";
+import { listByStatuses } from "../airtable/candidates.js";
 import { config } from "../config.js";
 import {
   ONBOARDING_STATUS,
   onboardingRank,
   isParkingState,
+  REQUIRED_ONBOARDING_STATUS_OPTIONS,
   type Candidate,
 } from "../domain.js";
 import { log } from "../lib/logger.js";
@@ -45,7 +46,7 @@ export function computeDigest(candidates: Candidate[], now: Date): Digest {
   const newDeployable: DigestRow[] = [];
 
   for (const c of candidates) {
-    const status = c.onboardingStatus ?? "(none)";
+    const status = c.status ?? "(none)";
     counts[status] = (counts[status] ?? 0) + 1;
     const d = daysIn(c, now);
 
@@ -95,7 +96,7 @@ export function formatDigest(d: Digest): string {
 
 /** Compute and send the weekly digest to the owner (email and/or SMS). */
 export async function runWeeklyDigest(now: Date = new Date()): Promise<Digest> {
-  const candidates = await listAllInOnboarding();
+  const candidates = await listByStatuses([...REQUIRED_ONBOARDING_STATUS_OPTIONS]);
   const digest = computeDigest(candidates, now);
   const body = formatDigest(digest);
   const notifier = getNotifier();

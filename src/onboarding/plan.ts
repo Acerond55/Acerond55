@@ -66,7 +66,7 @@ function sameCalendarDay(a: Date, b: Date): boolean {
  * single day even if the scanner ticks several times.
  */
 export function nextNudgeAction(c: Candidate, now: Date): NudgeDecision {
-  const status = c.onboardingStatus;
+  const status = c.status;
   if (!status) return { type: "none" };
   const plan = NUDGE_PLAN[status];
   if (!plan) return { type: "none" };

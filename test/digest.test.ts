@@ -13,12 +13,12 @@ function c(o: Partial<Candidate>): Candidate {
 
 describe("weekly digest", () => {
   const population: Candidate[] = [
-    c({ email: "a@x.com", onboardingStatus: S.AGREEMENT_SENT, stageEnteredAt: daysAgo(1) }),
-    c({ email: "b@x.com", onboardingStatus: S.PAYMENT_SETUP_DONE, stageEnteredAt: daysAgo(6) }),
-    c({ email: "d@x.com", onboardingStatus: S.DEPLOYABLE, stageEnteredAt: daysAgo(2) }),
-    c({ email: "e@x.com", onboardingStatus: S.DEPLOYABLE, stageEnteredAt: daysAgo(30) }),
-    c({ email: "f@x.com", onboardingStatus: S.STALLED, stallStage: S.AGREEMENT_SENT }),
-    c({ email: "g@x.com", onboardingStatus: S.STALLED, stallStage: S.SENT_TO_KLOQD }),
+    c({ email: "a@x.com", status: S.AGREEMENT_SENT, stageEnteredAt: daysAgo(1) }),
+    c({ email: "b@x.com", status: S.PAYMENT_SETUP_DONE, stageEnteredAt: daysAgo(6) }),
+    c({ email: "d@x.com", status: S.DEPLOYABLE, stageEnteredAt: daysAgo(2) }),
+    c({ email: "e@x.com", status: S.DEPLOYABLE, stageEnteredAt: daysAgo(30) }),
+    c({ email: "f@x.com", status: S.STALLED, stallStage: S.AGREEMENT_SENT }),
+    c({ email: "g@x.com", status: S.STALLED, stallStage: S.SENT_TO_KLOQD }),
   ];
 
   const d = computeDigest(population, now);

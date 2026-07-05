@@ -1,9 +1,8 @@
-import { listAllInOnboarding } from "../airtable/candidates.js";
-import { type Candidate } from "../domain.js";
+import { listByStatuses } from "../airtable/candidates.js";
+import { ONBOARDING_STATUS, type Candidate } from "../domain.js";
 import { log } from "../lib/logger.js";
 import { nextNudgeAction } from "./plan.js";
 import {
-  advancePaymentSetup,
   fireGustoInvite,
   handoffToKloqd,
   sendContractorAgreement,
@@ -13,17 +12,27 @@ import {
 } from "./service.js";
 import { scanAction } from "./spine.js";
 
+/** The statuses the scanner touches (actionable + nudge-waiting). */
+const SCAN_STATUSES = [
+  ONBOARDING_STATUS.READY_TO_ONBOARD, // Screened - Pass
+  ONBOARDING_STATUS.AGREEMENT_SENT, // Docs Sent
+  ONBOARDING_STATUS.AGREEMENT_SIGNED, // Docs Signed
+  ONBOARDING_STATUS.PAYMENT_SETUP_DONE,
+  ONBOARDING_STATUS.USN_COMPLETE, // Training Complete
+  ONBOARDING_STATUS.SENT_TO_KLOQD,
+];
+
 /**
- * One pass of the onboarding scanner. For each candidate in the onboarding
- * stage: run the forward action its status implies (idempotent — each action
- * advances state via a persisted flag/status, so it never repeats); if no
- * action is due, evaluate the nudge/stall plan. Actions take priority over
- * nudges so a candidate is never both advanced and nudged in the same tick.
+ * One pass of the onboarding scanner. For each candidate in an actionable
+ * status, run the single forward action its status implies (idempotent — each
+ * action advances state via a persisted flag/status, so it never repeats). If
+ * no action is due, evaluate the nudge/stall plan. Actions take priority so a
+ * candidate is never both advanced and nudged in one tick.
  */
 export async function runOnboardingScan(
   now: Date = new Date()
 ): Promise<{ scanned: number; acted: number; nudged: number; stalled: number }> {
-  const candidates = await listAllInOnboarding();
+  const candidates = await listByStatuses([...SCAN_STATUSES]);
   let acted = 0;
   let nudged = 0;
   let stalled = 0;
@@ -45,18 +54,13 @@ export async function runOnboardingScan(
     } catch (err) {
       log.error("onboarding scan: candidate failed", {
         email: c.email,
-        status: c.onboardingStatus,
+        status: c.status,
         error: String(err),
       });
     }
   }
 
-  log.info("onboarding scan complete", {
-    scanned: candidates.length,
-    acted,
-    nudged,
-    stalled,
-  });
+  log.info("onboarding scan complete", { scanned: candidates.length, acted, nudged, stalled });
   return { scanned: candidates.length, acted, nudged, stalled };
 }
 
@@ -67,9 +71,6 @@ async function runAction(c: Candidate, now: Date): Promise<boolean> {
       return true;
     case "gusto_invite":
       await fireGustoInvite(c, now);
-      return true;
-    case "advance_payment":
-      await advancePaymentSetup(c, now);
       return true;
     case "send_deployment_form":
       await sendDeploymentForm(c, now);

@@ -1,60 +1,57 @@
 /**
  * Shared domain types and the canonical status vocabulary.
  *
- * The status strings below are the SINGLE SOURCE OF TRUTH. They must exist
- * verbatim as options on the Airtable Status single-select field — the
- * status-option safety check (src/airtable/statusOptions.ts) enforces this
- * at startup and fails loudly if any are missing.
+ * These strings are the SINGLE SOURCE OF TRUTH and are mapped onto the REAL
+ * USN Operations base: one `Status` single-select drives the whole journey.
+ * The status-option safety check (src/airtable/statusOptions.ts) verifies every
+ * value below exists as an option and fails loudly if any is missing.
  */
 
+/**
+ * Screening-phase status values (all options on the one `Status` field).
+ * Keys are kept stable; values match the base's real option names.
+ */
 export const STATUS = {
-  CALL_BOOKED: "Call Booked",
-  CALL_NO_SHOW: "Call No-Show",
-  PENDING_REVIEW: "Screened — Pending Review",
-  PASSED: "Passed",
-  FAILED: "Failed",
-  ONBOARDING_SENT: "Onboarding Sent",
-  ONBOARDING_COMPLETE: "Onboarding Complete",
+  CALL_BOOKED: "Phone Screen Booked",
+  CALL_NO_SHOW: "Phone Screen No-Show", // NEW option (add by hand)
+  PENDING_REVIEW: "Screened - Pending Review", // NEW option (add by hand)
+  PASSED: "Screened - Pass",
+  FAILED: "Screened - Decline",
 } as const;
 
 export type StatusValue = (typeof STATUS)[keyof typeof STATUS];
 
-/** Every status option the code will ever try to write to Airtable. */
 export const REQUIRED_STATUS_OPTIONS: StatusValue[] = Object.values(STATUS);
 
-export const SCREEN_TYPE = {
-  VIDEO: "Video",
-  CALL: "Call",
+/** Tier field — used to route a "review" screen outcome to a human. */
+export const TIER = {
+  FAST_TRACK: "Tier 1 - Fast Track",
+  NEEDS_REVIEW: "Tier 2 - Needs Review",
+  DECLINE: "Decline",
 } as const;
 
-export type ScreenTypeValue = (typeof SCREEN_TYPE)[keyof typeof SCREEN_TYPE];
-
-export const REQUIRED_SCREEN_TYPE_OPTIONS: ScreenTypeValue[] =
-  Object.values(SCREEN_TYPE);
-
 /**
- * The onboarding status spine — the field that drives the post-screening half
- * of the pipeline. Ordered: each value is the gate (TRIGGER) for the next step.
- * Like the screening STATUS vocabulary, these must exist verbatim as options on
- * the Airtable `Onboarding Status` single-select; the safety check enforces it.
+ * Onboarding-phase status values — SAME physical `Status` field, later stages.
+ * Keys are kept stable (so call sites don't churn); values match the base plus
+ * the payment/kloqd stages you asked to track as their own statuses.
  */
 export const ONBOARDING_STATUS = {
-  READY_TO_ONBOARD: "Ready to Onboard",
-  AGREEMENT_SENT: "Agreement Sent",
-  AGREEMENT_SIGNED: "Agreement Signed",
-  PAYMENT_SETUP_DONE: "Payment Setup Done",
-  USN_COMPLETE: "USN Complete",
-  SENT_TO_KLOQD: "Sent to kloqd",
-  DEPLOYABLE: "Deployable",
+  READY_TO_ONBOARD: "Screened - Pass", // pass IS the onboarding entry trigger
+  AGREEMENT_SENT: "Onboarding - Docs Sent",
+  AGREEMENT_SIGNED: "Onboarding - Docs Signed",
+  PAYMENT_SETUP_DONE: "Payment Setup Done", // NEW option (add by hand)
+  USN_COMPLETE: "Onboarding - Training Complete",
+  SENT_TO_KLOQD: "Sent to kloqd", // NEW option (add by hand)
+  DEPLOYABLE: "Active",
   // Parking states — tracked, NOT failures. Excluded from the linear order.
-  STALLED: "Onboarding Stalled",
-  OPTED_OUT: "Opted Out",
+  STALLED: "Stalled",
+  OPTED_OUT: "Opted Out", // NEW option (add by hand)
 } as const;
 
 export type OnboardingStatusValue =
   (typeof ONBOARDING_STATUS)[keyof typeof ONBOARDING_STATUS];
 
-/** Linear spine order — index encodes progress; used to prevent backward flips. */
+/** Linear spine order — index encodes progress; prevents backward flips. */
 export const ONBOARDING_ORDER: OnboardingStatusValue[] = [
   ONBOARDING_STATUS.READY_TO_ONBOARD,
   ONBOARDING_STATUS.AGREEMENT_SENT,
@@ -65,7 +62,6 @@ export const ONBOARDING_ORDER: OnboardingStatusValue[] = [
   ONBOARDING_STATUS.DEPLOYABLE,
 ];
 
-/** All nine options that must exist on the Onboarding Status field. */
 export const REQUIRED_ONBOARDING_STATUS_OPTIONS: OnboardingStatusValue[] = [
   ...ONBOARDING_ORDER,
   ONBOARDING_STATUS.STALLED,
@@ -87,24 +83,22 @@ export function isParkingState(value: string | undefined): boolean {
 }
 
 // --- Select-option vocabularies (must exist as Airtable options) ------------
-export const GUSTO_STATUS_OPTIONS = ["Not Invited", "Invited", "Complete"] as const;
+// Availability + Roles reuse / match the base's real option names.
 export const AVAILABILITY_OPTIONS = [
-  "Weekday Day",
-  "Weekday Eve",
-  "Sat",
-  "Sun",
+  "Weekday Mornings",
+  "Weekday Afternoons",
+  "Weekday Evenings",
+  "Saturday",
+  "Sunday",
+  "Holidays",
 ] as const;
 export const ROLES_OPTIONS = [
-  "Server",
+  "Banquet Server",
   "Bartender",
-  "Busser-Barback",
+  "Event Captain",
   "Coat Check",
-  "Captain-track",
-] as const;
-export const HAS_TRANSPORT_OPTIONS = [
-  "Own car",
-  "Rides-transit",
-  "Depends on venue",
+  "Barback or Busser",
+  "Brand Ambassador",
 ] as const;
 export const SHIRT_SIZE_OPTIONS = ["XS", "S", "M", "L", "XL", "2XL", "3XL"] as const;
 export const CERTS_OPTIONS = ["TIPS", "Food Handler", "None"] as const;
@@ -122,47 +116,40 @@ export interface Candidate {
   id: string;
   email: string;
   name?: string;
-  status?: string;
-  screenType?: string;
-  answers?: string;
-  score?: number;
-  scoreNotes?: string;
-  onboardingSentAt?: string; // ISO date string
-  reminderStage?: number; // 0 = initial sent, 1 = day-2 done, 2 = day-4 done
-  onboardingCompleted?: boolean;
-
   phone?: string;
   preferredLanguage?: string;
+  status?: string; // the one Status field (screening + onboarding)
+  answers?: string; // stored in Phone Screen Notes
+  scoreNotes?: string; // stored in Notes
+  tier?: string;
 
   // --- Onboarding stage (post-screening) ---
-  onboardingStatus?: string; // the ONBOARDING_STATUS spine
   docusignEnvelopeId?: string;
-  gustoStatus?: string; // Not Invited / Invited / Complete
+  gustoInvited?: boolean;
   deploymentFormSent?: boolean;
-  deploymentFormDone?: boolean;
   kloqdWorkerId?: string;
   // Nudge/stall bookkeeping (reset on every status flip)
   onboardingNudgeCount?: number;
   lastNudgeDate?: string; // ISO date string
   stallStage?: string;
-  /** Timestamp the candidate ENTERED their current onboarding status (from the
-   *  per-stage TS field). Powers time-in-stage, nudges and stall detection. */
+  /** Timestamp the candidate ENTERED their current status (Last Status Change).
+   *  Powers time-in-stage, nudges and stall detection. */
   stageEnteredAt?: string;
 
-  // Lean deployment data (Step 4) — multi-selects arrive as arrays
+  // Deployment data — multi-selects arrive as arrays
   availability?: string[];
   roles?: string[];
-  hasTransport?: string;
+  hasTransport?: boolean; // base "Has Transportation" checkbox
   shirtSize?: string;
-  hasBlackAttire?: boolean;
+  hasBlackAttire?: boolean; // base "Has Banquet Attire" checkbox
   certs?: string[];
 }
 
-/** The lean deployment-data fields collected at Step 4. */
+/** The deployment-data fields collected during onboarding. */
 export interface DeploymentData {
   availability?: string[];
   roles?: string[];
-  hasTransport?: string;
+  hasTransport?: boolean;
   shirtSize?: string;
   hasBlackAttire?: boolean;
   certs?: string[];

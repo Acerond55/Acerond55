@@ -10,7 +10,7 @@ function c(overrides: Partial<Candidate> = {}): Candidate {
   return {
     id: "rec1",
     email: "a@b.com",
-    onboardingStatus: S.AGREEMENT_SENT,
+    status: S.AGREEMENT_SENT,
     stageEnteredAt: base,
     onboardingNudgeCount: 0,
     ...overrides,
@@ -55,7 +55,7 @@ describe("nudge/stall engine", () => {
   });
 
   it("uses the Payment-stage stall label for the Agreement Signed wait", () => {
-    const signed = c({ onboardingStatus: S.AGREEMENT_SIGNED, onboardingNudgeCount: 2 });
+    const signed = c({ status: S.AGREEMENT_SIGNED, onboardingNudgeCount: 2 });
     // gives up at day 10 (240h) → stall stage 'Payment Setup Done'
     expect(nextNudgeAction(signed, hours(240))).toEqual({
       type: "stall",
@@ -65,7 +65,7 @@ describe("nudge/stall engine", () => {
 
   it("fires three nudges for the kloqd wait (48/96/144h)", () => {
     const k = (n: number) =>
-      c({ onboardingStatus: S.SENT_TO_KLOQD, onboardingNudgeCount: n });
+      c({ status: S.SENT_TO_KLOQD, onboardingNudgeCount: n });
     expect(nextNudgeAction(k(0), hours(48)).type).toBe("nudge");
     expect(nextNudgeAction(k(1), hours(96)).type).toBe("nudge");
     expect(nextNudgeAction(k(2), hours(144))).toEqual({
@@ -77,7 +77,7 @@ describe("nudge/stall engine", () => {
 
   it("has no plan for terminal/parking/transient statuses", () => {
     for (const s of [S.READY_TO_ONBOARD, S.USN_COMPLETE, S.DEPLOYABLE, S.STALLED, S.OPTED_OUT]) {
-      expect(nextNudgeAction(c({ onboardingStatus: s }), hours(500)).type).toBe("none");
+      expect(nextNudgeAction(c({ status: s }), hours(500)).type).toBe("none");
     }
   });
 });

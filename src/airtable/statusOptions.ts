@@ -2,35 +2,36 @@ import { config } from "../config.js";
 import {
   AVAILABILITY_OPTIONS,
   CERTS_OPTIONS,
-  GUSTO_STATUS_OPTIONS,
-  HAS_TRANSPORT_OPTIONS,
   PREFERRED_LANGUAGE_OPTIONS,
   REQUIRED_ONBOARDING_STATUS_OPTIONS,
-  REQUIRED_SCREEN_TYPE_OPTIONS,
   REQUIRED_STATUS_OPTIONS,
   ROLES_OPTIONS,
   SHIRT_SIZE_OPTIONS,
   STALL_STAGE_OPTIONS,
+  TIER,
 } from "../domain.js";
 import { getBaseSchema, type TableSchema } from "./client.js";
 
 /**
- * The single-select fields whose option values the code writes, mapped to the
- * exact option names that MUST already exist in Airtable. Airtable does not let
- * us create single-select options reliably via the API, so instead of creating
- * them we verify they exist and fail loudly with instructions if they do not.
+ * The single/multi-select fields whose option values the code writes, mapped to
+ * the exact option names that MUST already exist in Airtable. Airtable does not
+ * let us create select options reliably via the API, so instead of creating them
+ * we verify they exist and fail loudly with instructions if they do not.
+ *
+ * Screening + onboarding share ONE physical `Status` field, so their option
+ * lists are merged into that single field entry.
  */
 export function requiredOptionsByField(): Record<string, string[]> {
   const f = config.airtable.fields;
+  const allStatus = Array.from(
+    new Set([...REQUIRED_STATUS_OPTIONS, ...REQUIRED_ONBOARDING_STATUS_OPTIONS])
+  );
   return {
-    [f.status]: [...REQUIRED_STATUS_OPTIONS],
-    [f.screenType]: [...REQUIRED_SCREEN_TYPE_OPTIONS],
-    [f.onboardingStatus]: [...REQUIRED_ONBOARDING_STATUS_OPTIONS],
+    [f.status]: allStatus,
+    [f.tier]: Object.values(TIER),
     [f.stallStage]: [...STALL_STAGE_OPTIONS],
-    [f.gustoStatus]: [...GUSTO_STATUS_OPTIONS],
     [f.availability]: [...AVAILABILITY_OPTIONS],
     [f.roles]: [...ROLES_OPTIONS],
-    [f.hasTransport]: [...HAS_TRANSPORT_OPTIONS],
     [f.shirtSize]: [...SHIRT_SIZE_OPTIONS],
     [f.certs]: [...CERTS_OPTIONS],
     [f.preferredLanguage]: [...PREFERRED_LANGUAGE_OPTIONS],
