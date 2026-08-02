@@ -1,33 +1,46 @@
-# USN Screening Pipeline — Manual Setup Checklist
+# USN Pipeline — Setup Checklist
 
-These are the steps the code **cannot** do for you because they live inside
-vendor dashboards. Do them in order. Anything the code *can* check, it does:
-run `npm run check:airtable` after the Airtable section to confirm.
+This is everything the code **can't** do for you because it lives inside vendor
+dashboards (Airtable, VideoAsk, Calendly, DocuSign, …). Work top to bottom.
 
-Throughout, `PUBLIC_BASE_URL` means the public HTTPS URL where this service is
-reachable (e.g. your deployed host, or an `ngrok`/`cloudflared` tunnel during
-testing).
+**Two terms used throughout:**
+
+- **`PUBLIC_BASE_URL`** — the public HTTPS address where this service runs (your
+  deployed host, or an `ngrok` / `cloudflared` tunnel while testing).
+- **`.env`** — copy `.env.example` to `.env` and fill values in as each section
+  tells you to. Every `UPPERCASE_NAME` below is a line in that file.
+
+---
+
+## ⚡ Start here — the 3 things that block everything else
+
+Do these first; nothing works until they're done.
+
+1. **Add 5 options to your Airtable `Status` field** → [§1.2](#12-add-5-status-options)
+2. **Add 12 new fields to the Candidates table** → [§1.3](#13-add-12-new-fields)
+3. **Create an Airtable token, put it in `.env`** → [§1.4](#14-create-the-airtable-token)
+
+Then run **`npm run check:airtable`**. It tells you exactly what's still missing,
+by name. Everything after §1 can wait until you're ready to go live.
 
 ---
 
 ## 1. Airtable — the system of record
 
-> The code is mapped to your REAL **USN Operations › Candidates** table. Most
-> fields already exist and are reused as-is. You only need to (1c) add a handful
-> of new fields and (1b) add a few new `Status` options by hand.
+The code is already mapped to your real **USN Operations › Candidates** table.
+Most columns exist and are reused as-is — you only add a few new ones.
 
-### 1a. Fields the code reuses (already in your base — no action)
+### 1.1. Fields already in your base (no action needed)
 
 `Full Name`, `Email`, `Phone`, `Tier`, `Availability`, `Has Transportation`,
-`Has Banquet Attire`, `Phone Screen Notes` (stores screen answers), `Notes`
-(stores score/interviewer notes), and the date columns `Phone Screen Date`,
-`Docs Sent Date`, `Docs Signed Date`, `Training Complete Date`,
-`Activation Date` (reused as per-milestone funnel timestamps).
+`Has Banquet Attire`, `Phone Screen Notes`, `Notes`, and the date columns
+`Phone Screen Date`, `Docs Sent Date`, `Docs Signed Date`,
+`Training Complete Date`, `Activation Date`.
 
-### 1b. `Status` options to ADD by hand (the API can't create these)
+### 1.2. Add 5 `Status` options
 
-Your `Status` field already has the base pipeline. Open it → *Customize field
-type* and add these **5 new options** (exact text — note hyphens, not em-dashes):
+Open the **`Status`** field → *Customize field type* → add these, **exactly**
+(plain hyphens, not em-dashes):
 
 - `Phone Screen No-Show`
 - `Screened - Pending Review`
@@ -35,48 +48,47 @@ type* and add these **5 new options** (exact text — note hyphens, not em-dashe
 - `Sent to kloqd`
 - `Opted Out`
 
-The pipeline reuses your existing options as its stages: `Phone Screen Booked`,
-`Screened - Pass` (= onboarding entry), `Screened - Decline`,
-`Onboarding - Docs Sent`, `Onboarding - Docs Signed`,
-`Onboarding - Training Complete`, `Active` (= deployable/live), `Stalled`.
+Your existing options double as the pipeline's stages, so leave them:
+`Phone Screen Booked` · `Screened - Pass` · `Screened - Decline` ·
+`Onboarding - Docs Sent` · `Onboarding - Docs Signed` ·
+`Onboarding - Training Complete` · `Active` · `Stalled`.
 
-### 1c. NEW fields to add to the Candidates table
+### 1.3. Add 12 new fields
 
-Add these columns (names must match the `AIRTABLE_FIELD_*` env vars):
+Add each column with the **exact name** shown (they must match the `.env`
+defaults). For select fields, add the listed options too.
 
-| Field | Type | Notes |
-| ----- | ---- | ----- |
-| `Preferred Language` | **Single select** | Options: `English`, `Spanish`, `Either`. |
-| `Roles` | **Multi select** | `Banquet Server`, `Bartender`, `Event Captain`, `Coat Check`, `Barback or Busser`, `Brand Ambassador`. |
-| `Shirt Size` | **Single select** | `XS`, `S`, `M`, `L`, `XL`, `2XL`, `3XL`. |
-| `Certs` | **Multi select** | `TIPS`, `Food Handler`, `None`. |
-| `Stall Stage` | **Single select** | `Screened - Pass`, `Onboarding - Docs Sent`, `Onboarding - Docs Signed`, `Payment Setup Done`, `Onboarding - Training Complete`, `Sent to kloqd`, `Active`. |
-| `DocuSign Envelope ID` | Single line text | Stored when the agreement is sent. |
-| `kloqd Worker ID` | Single line text | Returned by the kloqd push (Phase B). |
-| `Gusto Invited` | Checkbox | Gates the one-time Gusto invite. |
-| `Deployment Form Sent` | Checkbox | Gates the one-time form text. |
-| `Onboarding Nudge Count` | Number (integer) | Reset to 0 on every status flip. |
-| `Last Nudge Date` | Date (with time) | Guards against same-day double-sends. |
-| `Last Status Change` | Date (with time) | Stamped on every flip — powers nudges/stall timing. |
+| Field name | Type | Options to add |
+| ---------- | ---- | -------------- |
+| `Preferred Language` | Single select | `English`, `Spanish`, `Either` |
+| `Roles` | Multi select | `Banquet Server`, `Bartender`, `Event Captain`, `Coat Check`, `Barback or Busser`, `Brand Ambassador` |
+| `Shirt Size` | Single select | `XS`, `S`, `M`, `L`, `XL`, `2XL`, `3XL` |
+| `Certs` | Multi select | `TIPS`, `Food Handler`, `None` |
+| `Stall Stage` | Single select | `Screened - Pass`, `Onboarding - Docs Sent`, `Onboarding - Docs Signed`, `Payment Setup Done`, `Onboarding - Training Complete`, `Sent to kloqd`, `Active` |
+| `DocuSign Envelope ID` | Single line text | — |
+| `kloqd Worker ID` | Single line text | — |
+| `Gusto Invited` | Checkbox | — |
+| `Deployment Form Sent` | Checkbox | — |
+| `Onboarding Nudge Count` | Number (integer) | — |
+| `Last Nudge Date` | Date (include time) | — |
+| `Last Status Change` | Date (include time) | — |
 
-> ✅ **Verify:** run `npm run check:airtable`. It prints `✓ All required Airtable
-> status options are present.` or lists exactly what's still missing (by name).
+### 1.4. Create the Airtable token
 
-### 1c. Token
+1. Go to <https://airtable.com/create/tokens>.
+2. Give it these **scopes**: `data.records:read`, `data.records:write`,
+   `schema.bases:read` (the last one powers the option check).
+3. Grant it access to the **USN Operations** base.
+4. In `.env`:
+   - `AIRTABLE_TOKEN` = the token value
+   - `AIRTABLE_BASE_ID` = the base id (`app…`, from the base's URL or API docs)
 
-Create a personal access token at <https://airtable.com/create/tokens> with
-scopes **`data.records:read`**, **`data.records:write`**, and
-**`schema.bases:read`** (the last is needed for the status-option check), granted
-to the USN Operations base.
+> ✅ **Check your work:** run `npm run check:airtable`. Green means §1 is done.
 
-- `AIRTABLE_TOKEN` = the token value
-- `AIRTABLE_BASE_ID` = the base id (starts with `app…`; see the base's API docs
-  page or URL)
+### 1.5. (Optional) interviewer pass/fail button
 
-### 1d. (Optional) interviewer pass/fail button
-
-To let an interviewer submit a call outcome from Airtable, add a **Button** field
-that opens a URL or runs an automation that does:
+To let an interviewer record a call outcome from Airtable, add a **Button** field
+that calls:
 
 ```
 POST {PUBLIC_BASE_URL}/call-outcome
@@ -84,209 +96,228 @@ Header: X-Interviewer-Secret: <INTERVIEWER_SECRET>
 Body:   { "email": "{Email}", "decision": "pass" }   // or "fail"
 ```
 
-(Or just use the printable script in `content/interviewer-call-script.md` and
-have the interviewer hit the endpoint via a small internal form.)
-
 ---
 
 ## 2. VideoAsk — the async video/audio screen
 
-1. Create a new VideoAsk form titled **"USN Candidate Screening"**.
-2. Add the **four questions** from `content/videoask-questions.json`, in order:
-   1. Hospitality / event experience
-   2. Upset guest, captain not nearby — what do you do?
-   3. Reliability + an example
-   4. Comfortable on feet 5–6 hrs + black service attire?
-3. For **each** question, enable **both Video and Audio** answer types (let
-   candidates choose). Keep video as the default answer type.
-4. Turn on **contact collection** for **name and email** (email required) — the
-   pipeline matches candidates by email.
-5. **Webhook:** in the form's *Connect → Webhooks* (or integrations), add:
+1. Create a form titled **"USN Candidate Screening"**.
+2. Add the **4 questions** from `content/videoask-questions.json`, in order.
+3. For each question, allow **both Video and Audio** answers (video as default).
+4. Turn on **contact collection** for **name + email** (email required — it's how
+   candidates are matched).
+5. Add a **webhook** (form → *Connect → Webhooks*):
    - URL: `{PUBLIC_BASE_URL}/webhooks/videoask`
-   - Add a header **`X-Webhook-Secret`** whose value equals
-     `VIDEOASK_WEBHOOK_SECRET`. (If VideoAsk's webhook UI doesn't allow custom
-     headers on your plan, append `?secret=<VIDEOASK_WEBHOOK_SECRET>` to the URL
-     instead — the code accepts either.)
-6. Copy the form's public share URL into `VIDEOASK_URL` (this is what the choice
-   screen's "Record a quick video" button links to).
+   - Header **`X-Webhook-Secret`** = your `VIDEOASK_WEBHOOK_SECRET`.
+   - *No custom-header support on your plan?* Instead use
+     `{PUBLIC_BASE_URL}/webhooks/videoask?secret=<VIDEOASK_WEBHOOK_SECRET>`.
+6. Copy the form's public share link into `VIDEOASK_URL`.
 
-- `VIDEOASK_WEBHOOK_SECRET` = a long random string you choose (use the same value
-  in VideoAsk and `.env`).
-- `VIDEOASK_URL` = the public form link.
+**`.env`:** `VIDEOASK_WEBHOOK_SECRET` (a long random string you pick, same in both
+places) · `VIDEOASK_URL`.
 
 ---
 
 ## 3. Calendly — the booked-call path
 
-1. Use (or create) the **screening call** event type. Copy its public scheduling
-   URL into `CALENDLY_URL` (this is what the "Book a call" link points to).
-2. Create a **webhook subscription** (Integrations → Webhooks, or via the API)
-   scoped to your user/organization, subscribed to these events:
-   - `invitee.created` → the pipeline sets status **Call Booked**.
-   - `invitee.no_show.created` → the pipeline sets status **Call No-Show**.
-     (Mark a no-show in Calendly after a missed call to fire this.)
-   - Set the webhook **URL** to `{PUBLIC_BASE_URL}/webhooks/calendly`.
-3. Copy the subscription's **signing key** into `CALENDLY_WEBHOOK_SIGNING_KEY`
-   — the code verifies the `Calendly-Webhook-Signature` HMAC on every request.
+1. Use or create your **screening call** event type; copy its public scheduling
+   URL into `CALENDLY_URL`.
+2. Add a **webhook subscription** (Integrations → Webhooks) pointed at
+   `{PUBLIC_BASE_URL}/webhooks/calendly`, subscribed to:
+   - `invitee.created` → sets status **`Phone Screen Booked`**
+   - `invitee.no_show.created` → sets status **`Phone Screen No-Show`**
+     (mark the no-show in Calendly after a missed call to fire this)
+3. Copy the subscription's **signing key** into `CALENDLY_WEBHOOK_SIGNING_KEY`.
 
-> **Note on "call completed":** Calendly has no native "call completed" webhook.
-> Call **completion + outcome** is interviewer-driven: after the call, the
-> interviewer submits pass/fail to `POST /call-outcome` (see 1d), which sets the
-> record to **Screened — Pending Review** and then routes pass/fail. This keeps
-> the call and video paths comparable.
+> **Why there's no "call completed" webhook:** Calendly doesn't emit one. After
+> the call, the interviewer submits the outcome to `POST /call-outcome`
+> ([§1.5](#15-optional-interviewer-passfail-button)), which sets
+> **`Screened - Pending Review`**, then routes to pass/decline. This keeps the
+> call and video paths identical downstream.
 
-- `CALENDLY_URL` = public scheduling URL.
-- `CALENDLY_WEBHOOK_SIGNING_KEY` = signing key from the webhook subscription.
+**`.env`:** `CALENDLY_URL` · `CALENDLY_WEBHOOK_SIGNING_KEY`.
 
 ---
 
-## 4. Email / SMS provider (when you're ready to actually send)
+## 4. Sending email / SMS (optional until you go live)
 
-Sending is behind the `Notifier` interface, so this is optional until you go
-live. Defaults log only.
+Sending sits behind a `Notifier` interface. By default it just **logs** — safe
+for testing.
 
-1. Pick a provider (Instantly, Resend, Twilio, …).
-2. Open `src/notify/notifier.ts` and fill in `makeExampleNotifier` with that
-   provider's real API contract (the skeleton shows where).
-3. Set `NOTIFIER_PROVIDER=example`, `NOTIFIER_API_KEY=…`, and the
-   `NOTIFIER_FROM_EMAIL` / `NOTIFIER_FROM_SMS` values.
+1. Pick a provider (Twilio, Resend, Instantly, …).
+2. Fill in `makeExampleNotifier` in `src/notify/notifier.ts` with that provider's
+   API (the skeleton shows where).
+3. In `.env`: `NOTIFIER_PROVIDER=example`, `NOTIFIER_API_KEY=…`, plus
+   `NOTIFIER_FROM_EMAIL` / `NOTIFIER_FROM_SMS`.
 
-Until then, leave `NOTIFIER_PROVIDER=console`. Note that `DRY_RUN=true` forces
-the console notifier regardless, so you can't accidentally send during testing.
+Leave `NOTIFIER_PROVIDER=console` until then. `DRY_RUN=true` **also** forces the
+console notifier, so you can't send anything by accident while testing.
 
 ---
 
-## 4b. Onboarding stage (post-screening)
+## 5. The onboarding flow (post-screening)
 
-The onboarding half runs off the **`Onboarding Status`** spine (nine options in
-1b). A candidate enters at **`Ready to Onboard`**; the scanner advances them,
-sends stage nudges, and parks non-responders in **`Onboarding Stalled`** (a
-tracked state, not a failure). A **STOP** reply moves anyone to **`Opted Out`**
-and halts all messaging permanently. Every message goes out in the candidate's
-**`Preferred Language`** (English/Spanish).
+Once a candidate reaches **`Screened - Pass`**, the scanner drives them through
+the rest automatically — one step per scan — sending nudges along the way and
+parking non-responders in **`Stalled`** (tracked, not a failure). A **STOP** text
+moves anyone to **`Opted Out`** and halts all messaging. Every message is sent in
+the candidate's **`Preferred Language`**.
 
-### DocuSign (Step 1 send / Step 2 completion)
+**The status ladder** (each arrow is one automated step):
 
-1. Build a DocuSign **template** for the 3-page ICA + **W-9** in one envelope
-   (one signing session; `DOCUSIGN_INCLUDE_W9=true`). **[CONFIRM]** copy its
-   template id into `DOCUSIGN_ICA_TEMPLATE_ID`.
-2. **[CONFIRM]** decide how Schedule A attaches per candidate (merge field vs a
-   per-candidate document) and reflect it in the template.
-3. Enable DocuSign's built-in **reminder at 72 hrs** on the template/envelope.
-4. Set up **DocuSign Connect** → POST to `{PUBLIC_BASE_URL}/webhooks/docusign`;
-   put the Connect **HMAC key** into `DOCUSIGN_CONNECT_HMAC_KEY`. The handler
-   covers **completed** (→ Agreement Signed), **declined** (→ Stalled + flag for
-   a personal call), and **bounce** (→ SMS asking for a better email). A
-   completed envelope with `w9Valid:false` is held for manual review.
-5. For live sending, fill `DOCUSIGN_ACCOUNT_ID` + `DOCUSIGN_ACCESS_TOKEN`, set
-   `DOCUSIGN_PROVIDER=example`, and complete `makeExampleSigner` in
-   `src/docusign/signer.ts` (incl. the W-9 composite + envelope void on STOP).
+```
+Screened - Pass
+  └─ sends DocuSign ICA + W-9 ─────────────► Onboarding - Docs Sent
+       └─ candidate signs (DocuSign webhook) ► Onboarding - Docs Signed
+            └─ fires Gusto invite (once) ────► (waits for payment setup)
+                 └─ POST /onboarding/payment-done ► Payment Setup Done
+                      └─ texts deployment form ──► (waits for form)
+                           └─ form submitted ────► Onboarding - Training Complete
+                                └─ texts kloqd join code ► Sent to kloqd
+                                     └─ kloqd complete ──► Active  (deployable / live)
+```
 
-> Move a candidate to `Ready to Onboard` when screening passes and you're
-> satisfied (AI confidence High, or cleared from spot-check).
+Set a candidate to **`Screened - Pass`** when screening passes and you're
+satisfied (AI confidence High, or cleared by spot-check). Everything below is
+about wiring the external tools each step talks to.
 
-### Gusto (Step 3 direct deposit)
+### 5.1. DocuSign — the agreement (Docs Sent → Docs Signed)
 
-Default is **manual**: at `Agreement Signed` the scanner texts the candidate and
-sets `Gusto Status` = `Invited`. When they finish Gusto, set `Gusto Status` =
-`Complete` — via `POST /onboarding/gusto-status` `{email, status}` with
-`X-Interviewer-Secret`, or an Airtable button. The next scan advances to
-`Payment Setup Done`. **[CONFIRM]** manual vs Gusto API/Make. **[DECISION]** is
-there a paper-check fallback, or is direct deposit mandatory
-(`DIRECT_DEPOSIT_MANDATORY`)? A "no bank account" reply is flagged for you.
+1. Build a DocuSign **template**: the 3-page ICA **+ W-9** in one envelope
+   (`DOCUSIGN_INCLUDE_W9=true`). Put its id in `DOCUSIGN_ICA_TEMPLATE_ID`. **[CONFIRM]**
+2. Decide how **Schedule A** attaches per candidate (merge field vs. per-candidate
+   doc) and build that into the template. **[CONFIRM]**
+3. Turn on DocuSign's built-in **72-hour reminder**.
+4. Set up **DocuSign Connect** → `POST {PUBLIC_BASE_URL}/webhooks/docusign`, and
+   put its **HMAC key** in `DOCUSIGN_CONNECT_HMAC_KEY`. The handler covers:
+   - **completed** → `Onboarding - Docs Signed` (held for review if the W-9 fails validation)
+   - **declined** → `Stalled` + flagged for a personal call
+   - **bounce** → texts the candidate for a better email
+5. To send for real: fill `DOCUSIGN_ACCOUNT_ID` + `DOCUSIGN_ACCESS_TOKEN`, set
+   `DOCUSIGN_PROVIDER=example`, and finish `makeExampleSigner` in
+   `src/docusign/signer.ts`.
 
-### Deployment-data form (Step 4)
+### 5.2. Gusto — direct deposit (→ Payment Setup Done)
 
-Put the lean form (Airtable form view or your own) at `ONBOARDING_DATA_FORM_URL`;
-wire its submission to `POST {PUBLIC_BASE_URL}/onboarding/deployment-data` with
-`{ email, availability[], roles[], certs[], hasTransport, shirtSize, hasBlackAttire }`.
-Counts as done once **Availability and Roles** are filled (the minimum to book);
-sizes/certs can be chased later. Then the candidate flips to **`USN Complete`**.
+Default is **manual**. At `Onboarding - Docs Signed` the scanner texts the
+candidate a Gusto link and ticks **`Gusto Invited`** (once). When they finish:
 
-### STOP / opt-out + inbound SMS
+```
+POST {PUBLIC_BASE_URL}/onboarding/payment-done
+Header: X-Interviewer-Secret: <INTERVIEWER_SECRET>
+Body:   { "email": "candidate@example.com" }
+```
+
+That advances them to **`Payment Setup Done`**. Wire it to an Airtable button, a
+Gusto webhook, or a Make/Zapier step.
+
+- **[CONFIRM]** manual vs. Gusto-API automation (`GUSTO_MODE`, default `manual`).
+- **[DECISION]** is direct deposit mandatory, or is there a paper-check fallback?
+  (`DIRECT_DEPOSIT_MANDATORY`). A "no bank account" reply is flagged for you.
+
+### 5.3. Deployment-data form (→ Training Complete)
+
+Put your lean form (an Airtable form view works) at `ONBOARDING_DATA_FORM_URL`,
+and wire its submission to:
+
+```
+POST {PUBLIC_BASE_URL}/onboarding/deployment-data
+Body:   { "email": "...", "availability": [...], "roles": [...],
+          "certs": [...], "hasTransport": true, "shirtSize": "L",
+          "hasBlackAttire": true }
+```
+
+It counts as done once **Availability and Roles** are filled (the minimum to book
+someone); sizes/certs can be chased later. The candidate then advances to
+**`Onboarding - Training Complete`**.
+
+### 5.4. kloqd — the handoff (→ Sent to kloqd → Active)
+
+**Phase A (works now):** at `Onboarding - Training Complete` the scanner texts the
+candidate the kloqd signup link + agency join code, and sets **`Sent to kloqd`**.
+You just need two facts:
+
+- `KLOQD_AGENCY_JOIN_CODE` — USN's agency join code **[CONFIRM]**
+- `KLOQD_SIGNUP_URL` — the signup link **[CONFIRM]** (has a default)
+
+Then flip them to **`Active`** from your kloqd dashboard via:
+
+```
+POST {PUBLIC_BASE_URL}/onboarding/mark-deployable
+Header: X-Interviewer-Secret: <INTERVIEWER_SECRET>
+Body:   { "email": "...", "workerId": "optional" }
+```
+
+**Phase B (blocked — optional automation):** the auto pre-fill push to kloqd stays
+off until `KLOQD_API_URL` + `KLOQD_AUTH_TOKEN` are set (it fails loudly rather
+than guessing). To turn it on you'll need: the create-worker endpoint + auth,
+the exact accepted field names (reconcile `src/kloqd/client.ts`), an
+agreement-accepted passthrough, and a completion signal — either a webhook at
+`{PUBLIC_BASE_URL}/webhooks/kloqd` (set `KLOQD_WEBHOOK_SECRET`) or polling
+(`KLOQD_COMPLETION_MODE`).
+
+### 5.5. STOP / opt-out (inbound SMS)
 
 Point your SMS provider's inbound webhook at
-`{PUBLIC_BASE_URL}/webhooks/sms-inbound` (secret `SMS_INBOUND_SECRET`). A body
-starting with **STOP** matches the candidate by phone (or email) → `Opted Out`,
-voids any open envelope, and halts all USN messaging.
+`{PUBLIC_BASE_URL}/webhooks/sms-inbound` (secret `SMS_INBOUND_SECRET`). Any text
+starting with **STOP** matches the candidate by phone (or email) → sets
+**`Opted Out`**, voids any open envelope, and halts all messaging.
 
-### Weekly digest
+### 5.6. Weekly digest
 
-Wire a **Monday 8am ET** cron to `POST {PUBLIC_BASE_URL}/tasks/weekly-digest`
-(e.g. a scheduled GitHub Action or your host's scheduler). It emails/texts the
-owner (`DIGEST_EMAIL` / `DIGEST_PHONE`) counts by status, stalls ranked
-closest-to-done, who's about to stall (5+ days in stage), and this week's new
-`Deployable` count.
-
-## 4c. kloqd (Step 5) — Phase A now, Phase B blocked
-
-**Phase A (buildable now):** at `USN Complete` the scanner texts the candidate
-the kloqd signup URL + agency join code and flips to `Sent to kloqd`. You only
-need two facts:
-
-- **USN's agency join code** → `KLOQD_AGENCY_JOIN_CODE` **[CONFIRM]**
-- **The signup URL** → `KLOQD_SIGNUP_URL` **[CONFIRM]** (defaulted)
-
-**Step 6 (Deployable):** until a kloqd completion webhook exists, flip manually
-from your kloqd dashboard via `POST /onboarding/mark-deployable` `{email}` with
-`X-Interviewer-Secret`. That sends the welcome SMS.
-
-**Phase B (BLOCKED):** the automated pre-fill push needs four more facts. It
-stays off (Phase A still works) until `KLOQD_API_URL` + `KLOQD_AUTH_TOKEN` are
-set. When attempted unconfigured it fails loudly rather than guessing:
-
-1. **Create/pre-stage worker endpoint** → `KLOQD_API_URL`
-2. **Auth method** → `KLOQD_AUTH_TOKEN`
-3. **Exact accepted fields (+ names)** → reconcile `src/kloqd/client.ts`
-4. **Agreement-accepted passthrough** (so kloqd doesn't re-ask for legal) → same
-5. **Join code** (shared with Phase A) → `KLOQD_AGENCY_JOIN_CODE`
-6. **Worker-onboarding-complete signal** (webhook vs poll) →
-   `KLOQD_COMPLETION_MODE`; if webhook, point kloqd at
-   `{PUBLIC_BASE_URL}/webhooks/kloqd` and set `KLOQD_WEBHOOK_SECRET`
+Wire a **Monday 8am ET** cron (a scheduled GitHub Action, your host's scheduler,
+etc.) to `POST {PUBLIC_BASE_URL}/tasks/weekly-digest`. It sends the owner
+(`DIGEST_EMAIL` / `DIGEST_PHONE`) counts by status, stalls ranked closest-to-done,
+who's about to stall, and this week's new `Active` count.
 
 ---
 
-## 5. Env vars — fill in `.env`
+## 6. `.env` reference
 
-Copy `.env.example` → `.env` and fill these in:
+Copy `.env.example` → `.env`. Grouped by when you need it:
 
-| Var | Where it comes from |
-| --- | ------------------- |
-| `PORT` | Your choice (default 3000). |
-| `DRY_RUN` | `true` while testing, `false` for live writes/sends. |
-| `AIRTABLE_TOKEN` | Step 1c. |
-| `AIRTABLE_BASE_ID` | Step 1c. |
+**Needed to start (§1):**
+
+| Var | Value |
+| --- | ----- |
+| `AIRTABLE_TOKEN`, `AIRTABLE_BASE_ID` | From §1.4. |
 | `AIRTABLE_CANDIDATES_TABLE` | Your table name (default `Candidates`). |
-| `AIRTABLE_FIELD_*` | Only change if your columns are named differently than 1a. |
-| `VIDEOASK_WEBHOOK_SECRET` | Step 2.5 — random string you choose. |
-| `VIDEOASK_URL` | Step 2.6. |
-| `CALENDLY_WEBHOOK_SIGNING_KEY` | Step 3.3. |
-| `CALENDLY_URL` | Step 3.1. |
-| `SCORE_PASS_THRESHOLD` / `SCORE_REVIEW_THRESHOLD` | Your bar (defaults 70 / 50). |
-| `AI_SCORER_PROVIDER` / `AI_SCORER_API_KEY` | `none` until you wire a model. |
-| `INTERVIEWER_SECRET` | Random string; used by the call-outcome endpoint (1d). |
-| `ONBOARDING_URL` | Placeholder onboarding destination for now. |
-| `REMINDER_DAY_2` / `REMINDER_DAY_4` | Reminder cadence (defaults 2 / 4 days). |
-| `SCHEDULER_INTERVAL_MINUTES` / `SCHEDULER_ENABLED` | How often / whether to scan. |
-| `NOTIFIER_PROVIDER` / `NOTIFIER_API_KEY` / `NOTIFIER_FROM_*` | Step 4. |
-| `AIRTABLE_FIELD_*` / `AIRTABLE_TS_*` | Onboarding field + timestamp column names (1a). |
-| `ONBOARDING_SCAN_ENABLED` / `ONBOARDING_DATA_FORM_URL` | Step 4b. |
-| `DIRECT_DEPOSIT_MANDATORY` | Step 4b **[DECISION]** (paper-check policy). |
-| `SMS_INBOUND_SECRET` | Step 4b (STOP webhook) — random string you choose. |
-| `DIGEST_EMAIL` / `DIGEST_PHONE` / `DIGEST_ENABLED` | Step 4b (weekly digest). |
-| `DOCUSIGN_*` | Step 4b (DocuSign). `DOCUSIGN_ICA_TEMPLATE_ID` is **[CONFIRM]**. |
-| `GUSTO_MODE` | Step 4b (Gusto). `manual` by default. |
-| `KLOQD_SIGNUP_URL` / `KLOQD_AGENCY_JOIN_CODE` | Step 4c Phase A **[CONFIRM]**. |
-| `KLOQD_API_URL` / `KLOQD_AUTH_TOKEN` / `KLOQD_*` | Step 4c Phase B — blank keeps it blocked. |
+| `AIRTABLE_FIELD_*`, `AIRTABLE_TS_*` | Only change if you renamed a column from §1. |
+| `DRY_RUN` | `true` while testing, `false` for live writes/sends. |
+| `PORT` | Your choice (default 3000). |
+
+**Screening (§2–§3):**
+
+| Var | Value |
+| --- | ----- |
+| `VIDEOASK_WEBHOOK_SECRET`, `VIDEOASK_URL` | §2. |
+| `CALENDLY_WEBHOOK_SIGNING_KEY`, `CALENDLY_URL` | §3. |
+| `SCORE_PASS_THRESHOLD`, `SCORE_REVIEW_THRESHOLD` | Your bar (defaults 70 / 50). |
+| `AI_SCORER_PROVIDER`, `AI_SCORER_API_KEY` | `none` until you wire a model. |
+| `INTERVIEWER_SECRET` | Random string; guards the call-outcome + onboarding endpoints. |
+| `SCHEDULER_ENABLED`, `SCHEDULER_INTERVAL_MINUTES` | Whether / how often to scan. |
+
+**Onboarding (§5):**
+
+| Var | Value |
+| --- | ----- |
+| `ONBOARDING_SCAN_ENABLED` | Master switch for the onboarding scan. |
+| `NOTIFIER_PROVIDER`, `NOTIFIER_API_KEY`, `NOTIFIER_FROM_*` | §4. |
+| `DOCUSIGN_*` | §5.1 (`DOCUSIGN_ICA_TEMPLATE_ID` is **[CONFIRM]**). |
+| `GUSTO_MODE`, `DIRECT_DEPOSIT_MANDATORY` | §5.2 (**[DECISION]** on paper checks). |
+| `ONBOARDING_DATA_FORM_URL` | §5.3. |
+| `KLOQD_SIGNUP_URL`, `KLOQD_AGENCY_JOIN_CODE` | §5.4 Phase A **[CONFIRM]**. |
+| `KLOQD_API_URL`, `KLOQD_AUTH_TOKEN`, `KLOQD_*` | §5.4 Phase B — blank keeps it off. |
+| `SMS_INBOUND_SECRET` | §5.5 (random string you pick). |
+| `DIGEST_EMAIL`, `DIGEST_PHONE`, `DIGEST_ENABLED` | §5.6. |
 
 ---
 
-## 6. Go-live order
+## 7. Go-live order
 
-1. Fill in Airtable env vars → `npm run check:airtable` → fix any missing options.
-2. Deploy the service so `PUBLIC_BASE_URL` is reachable over HTTPS.
-3. Point the VideoAsk and Calendly webhooks at it (steps 2.5 / 3.2).
-4. Run a test candidate through **with `DRY_RUN=true`** — watch the logs to
-   confirm the flow without mutating Airtable or sending anything.
+1. Do **§1**, then `npm run check:airtable` until it's green.
+2. Deploy so `PUBLIC_BASE_URL` is reachable over HTTPS.
+3. Point the VideoAsk (§2) and Calendly (§3) webhooks at it.
+4. Run a test candidate through with **`DRY_RUN=true`** — watch the logs; nothing
+   is written or sent.
 5. Flip `DRY_RUN=false` and run one real end-to-end candidate.
-6. Embed/link `{PUBLIC_BASE_URL}/apply` wherever candidates apply.
+6. Link `{PUBLIC_BASE_URL}/apply` wherever candidates apply.
