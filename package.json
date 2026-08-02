@@ -1,0 +1,30 @@
+{
+  "name": "usn-screening-pipeline",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Universal Staffing Networks candidate screening pipeline — video-first async screen + booked-call path, Airtable as system of record.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "build": "tsc -p tsconfig.json && node -e \"require('fs').cpSync('src/public','dist/public',{recursive:true})\"",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check:airtable": "tsx src/scripts/checkStatusOptions.ts"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.14.0",
+    "tsx": "^4.16.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0"
+  }
+}

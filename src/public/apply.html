@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Apply — Universal Staffing Networks</title>
+    <style>
+      :root {
+        --ink: #14181f;
+        --muted: #5b6573;
+        --brand: #1f6feb;
+        --brand-dark: #1659c4;
+        --bg: #f6f8fb;
+        --card: #ffffff;
+        --line: #e4e8ee;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        color: var(--ink);
+        background: var(--bg);
+        -webkit-font-smoothing: antialiased;
+      }
+      .wrap {
+        max-width: 520px;
+        margin: 0 auto;
+        padding: 32px 20px 48px;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+      }
+      header { text-align: center; margin-bottom: 28px; }
+      .logo {
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        font-size: 14px;
+        color: var(--brand);
+        text-transform: uppercase;
+      }
+      h1 { font-size: 26px; line-height: 1.25; margin: 10px 0 6px; }
+      .sub { color: var(--muted); font-size: 15px; margin: 0; }
+
+      /* Primary path — video — visually dominant. */
+      .video-card {
+        display: block;
+        text-decoration: none;
+        color: #fff;
+        background: linear-gradient(135deg, var(--brand), var(--brand-dark));
+        border-radius: 18px;
+        padding: 28px 24px;
+        box-shadow: 0 10px 28px rgba(31, 111, 235, 0.28);
+        transition: transform 0.12s ease, box-shadow 0.12s ease;
+      }
+      .video-card:active { transform: scale(0.99); }
+      .video-card .badge {
+        display: inline-block;
+        font-size: 12px;
+        font-weight: 600;
+        background: rgba(255, 255, 255, 0.18);
+        padding: 4px 10px;
+        border-radius: 999px;
+        margin-bottom: 14px;
+      }
+      .video-card h2 { margin: 0 0 6px; font-size: 22px; }
+      .video-card p { margin: 0 0 18px; opacity: 0.92; font-size: 15px; }
+      .video-cta {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        background: #fff;
+        color: var(--brand-dark);
+        font-weight: 700;
+        font-size: 16px;
+        padding: 12px 20px;
+        border-radius: 12px;
+      }
+
+      .divider {
+        text-align: center;
+        color: var(--muted);
+        font-size: 13px;
+        margin: 22px 0 14px;
+        position: relative;
+      }
+
+      /* Secondary path — call — small, opt-in. */
+      .call-link {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        text-decoration: none;
+        color: var(--muted);
+        font-size: 14px;
+        border: 1px solid var(--line);
+        background: var(--card);
+        border-radius: 12px;
+        padding: 12px 16px;
+      }
+      .call-link b { color: var(--ink); font-weight: 600; }
+      footer { text-align: center; color: var(--muted); font-size: 12px; margin-top: 30px; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <div class="logo">Universal Staffing Networks</div>
+        <h1>Let's get you screened</h1>
+        <p class="sub">Quick and easy — most people finish in a few minutes.</p>
+      </header>
+
+      <a class="video-card" id="video-link" href="#">
+        <span class="badge">★ Recommended · fastest</span>
+        <h2>Record a quick video</h2>
+        <p>Answer four short questions on camera, whenever works for you. No appointment needed.</p>
+        <span class="video-cta">Record my video →</span>
+      </a>
+
+      <div class="divider">or</div>
+
+      <a class="call-link" id="call-link" href="#">
+        Prefer to talk?&nbsp;<b>Book a quick call</b>
+      </a>
+
+      <footer>Universal Staffing Networks · Hospitality &amp; Event Staffing</footer>
+    </div>
+
+    <script src="/apply/config.js"></script>
+    <script>
+      (function () {
+        var cfg = window.USN_CONFIG || {};
+        var v = document.getElementById("video-link");
+        var c = document.getElementById("call-link");
+        if (cfg.videoaskUrl) v.setAttribute("href", cfg.videoaskUrl);
+        if (cfg.calendlyUrl) c.setAttribute("href", cfg.calendlyUrl);
+      })();
+    </script>
+  </body>
+</html>
